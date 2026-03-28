@@ -1,9 +1,11 @@
+import io
 import streamlit as st
 import numpy as np
 import random
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from matplotlib.patches import FancyBboxPatch
+from matplotlib.collections import PatchCollection
 import matplotlib.patheffects as pe
 
 st.set_page_config(page_title="16 Squared", layout="wide", initial_sidebar_state="collapsed")
@@ -215,6 +217,50 @@ class SixteenSquaredEngine:
 
         return True, path, None
 
+    def _evaluate_scoring(self, board, path):
+        """Returns (complete_gain, partial_gain) for placing path on board as player 2.
+        complete_gain: points from new completed scoring lines created by this move.
+        partial_gain: total length of new partial lines (interior-touching, not yet complete).
+        """
+        temp = board.copy()
+        new_squares = [(px, py) for px, py in path if board[py, px] == 0]
+        for px, py in path:
+            temp[py, px] = 2
+
+        complete_gain = 0
+        partial_gain = 0
+        seen = set()
+
+        for nx, ny in new_squares:
+            for dx, dy in self.vectors.values():
+                # Walk back to find the start of this line
+                cx, cy = nx, ny
+                while 0 <= cx - dx < 16 and 0 <= cy - dy < 16 and temp[cy - dy, cx - dx] == 2:
+                    cx -= dx
+                    cy -= dy
+                if not self.is_border(cx, cy):
+                    continue
+                # Collect the full consecutive line
+                line, lx, ly = [], cx, cy
+                while 0 <= lx < 16 and 0 <= ly < 16 and temp[ly, lx] == 2:
+                    line.append((lx, ly))
+                    lx += dx
+                    ly += dy
+                if len(line) < 2:
+                    continue
+                if not any(0 < lx2 < 15 and 0 < ly2 < 15 for lx2, ly2 in line):
+                    continue
+                lid = tuple(sorted(line))
+                if lid in seen:
+                    continue
+                seen.add(lid)
+                if len(line) >= 3 and self.is_border(line[-1][0], line[-1][1]):
+                    complete_gain += len(line)
+                else:
+                    partial_gain += len(line)
+
+        return complete_gain, partial_gain
+
     def get_ai_move(self, board, max_tokens, round_num):
         best_move, best_weight = None, -float('inf')
         threat_map = np.zeros((16, 16))
@@ -243,6 +289,8 @@ class SixteenSquaredEngine:
                 weight += sum(threat_map[py, px] for px, py in path) * 1.8
                 if round_num >= 10:
                     weight += sum(1 for px, py in path if board[py, px] == 2) * 15
+                complete_gain, partial_gain = self._evaluate_scoring(board, path)
+                weight += complete_gain * 120 + partial_gain * 5
                 if weight > best_weight:
                     best_weight, best_move = weight, (ax, ay, ad, tc)
 
@@ -269,7 +317,11 @@ class SixteenSquaredEngine:
         if not path:
             return True
         completes_line = self.is_border(path[-1][0], path[-1][1]) if path else False
-        blocks_threat  = any(board[py, px] == 0 for px, py in path)
+        blocks_threat  = any(
+            any(0 <= px + ddx < 16 and 0 <= py + ddy < 16 and board[py + ddy, px + ddx] == 1
+                for ddx, ddy in self.vectors.values())
+            for px, py in path if board[py, px] == 0
+        )
         bridges        = any(board[py, px] == 2 for px, py in path)
         return not completes_line and not blocks_threat and not bridges
 
@@ -339,7 +391,19 @@ SCORE_LINE_P = "#4A8FD4"
 SCORE_LINE_G = "#E05A4A"
 
 
-def draw_board(board, preview_cells=None, new_cells=None, game_over=False):
+@st.cache_data
+def _board_bg_colors():
+    """Precompute the 16×16 RGB color array for the board background. Cached once."""
+    bg = np.full((16, 16, 3), [0xFA / 255, 0xF3 / 255, 0xE0 / 255], dtype=np.float32)
+    oak = np.array([0xC4 / 255, 0x9A / 255, 0x6C / 255], dtype=np.float32)
+    bg[0, :] = oak
+    bg[15, :] = oak
+    bg[:, 0] = oak
+    bg[:, 15] = oak
+    return bg
+
+
+def draw_board(board, new_cells=None, game_over=False):
     fig, ax = plt.subplots(figsize=(5.6, 5.6), facecolor=OAK_DARK)
     ax.set_xlim(-0.5, 16.5)
     ax.set_ylim(-0.5, 16.5)
@@ -353,27 +417,26 @@ def draw_board(board, preview_cells=None, new_cells=None, game_over=False):
         facecolor=OAK_DARK, edgecolor="#5C3A1E", linewidth=3
     ))
 
-    # Draw grain lines for wood effect
+    # Wood grain lines
     for i in range(0, 17, 2):
         ax.plot([i - 0.5, i + 0.2], [-0.5, 16.5],
                 color=OAK_GRAIN, alpha=0.12, lw=0.5)
 
-    # Border and battlefield squares
-    for y in range(16):
-        for x in range(16):
-            is_b = engine.is_border(x, y)
-            if is_b:
-                face = OAK_MID
-                edge = "#A07840"
-                lw   = 0.7
-            else:
-                face = FELT_CREAM
-                edge = "#E8D8B0"
-                lw   = 0.4
-            ax.add_patch(patches.Rectangle(
-                (x, y), 1, 1,
-                facecolor=face, edgecolor=edge, linewidth=lw, zorder=1
-            ))
+    # Board background: single pcolormesh call replaces 256 Rectangle patches
+    edges = np.arange(17, dtype=float)
+    ax.pcolormesh(edges, edges, _board_bg_colors(), zorder=1)
+
+    # Grid lines — two vectorized calls each replace per-cell Rectangle edges
+    # Interior battlefield: light cream, thin (matches original edgecolor="#E8D8B0", lw=0.4)
+    ax.vlines(range(2, 15), ymin=1, ymax=15, colors='#E8D8B0', linewidths=0.4, zorder=2)
+    ax.hlines(range(2, 15), xmin=1, xmax=15, colors='#E8D8B0', linewidths=0.4, zorder=2)
+    # Border/interior boundary + within-border strips: warm brown (matches edgecolor="#A07840", lw=0.7)
+    ax.vlines([1, 15], ymin=0, ymax=16, colors='#A07840', linewidths=0.7, zorder=2)
+    ax.hlines([1, 15], xmin=0, xmax=16, colors='#A07840', linewidths=0.7, zorder=2)
+    ax.vlines(range(2, 15), ymin=0, ymax=1,  colors='#A07840', linewidths=0.7, zorder=2)
+    ax.vlines(range(2, 15), ymin=15, ymax=16, colors='#A07840', linewidths=0.7, zorder=2)
+    ax.hlines(range(2, 15), xmin=0, xmax=1,  colors='#A07840', linewidths=0.7, zorder=2)
+    ax.hlines(range(2, 15), xmin=15, xmax=16, colors='#A07840', linewidths=0.7, zorder=2)
 
     # Inner battlefield border highlight
     ax.add_patch(patches.Rectangle(
@@ -384,21 +447,6 @@ def draw_board(board, preview_cells=None, new_cells=None, game_over=False):
         (1, 1), 14, 14,
         facecolor='none', edgecolor="#C49A6C", linewidth=0.8, zorder=3
     ))
-
-    # Preview ghost tokens
-    if preview_cells:
-        for px, py in preview_cells:
-            if board[py, px] == 0:
-                circ = patches.Circle(
-                    (px + 0.5, py + 0.5), 0.33,
-                    color=PREVIEW_COL, alpha=0.38, zorder=4
-                )
-                ax.add_patch(circ)
-                ax.add_patch(patches.Circle(
-                    (px + 0.5, py + 0.5), 0.33,
-                    facecolor='none', edgecolor=PREVIEW_COL,
-                    linewidth=1.2, alpha=0.7, zorder=4
-                ))
 
     # Scoring line highlights at game over
     if game_over:
@@ -414,54 +462,39 @@ def draw_board(board, preview_cells=None, new_cells=None, game_over=False):
             ax.plot(xs, ys, color=SCORE_LINE_G, lw=2.2, alpha=0.55,
                     zorder=5, solid_capstyle='round')
 
-    # Tokens
-    for y in range(16):
-        for x in range(16):
-            val = board[y, x]
-            if val == 0:
-                continue
-            is_new   = new_cells and (x, y) in new_cells
-            cx_      = x + 0.5
-            cy_      = y + 0.5
-            r        = 0.34
+    # Tokens: PatchCollection batches all patches per layer into one draw call
+    r = 0.34
+    new_set = set(map(tuple, new_cells)) if new_cells else set()
 
-            if val == 1:
-                fill = PLAYER_FILL
-                edge = PLAYER_EDGE
-                hi   = "#6BAED6"
-            else:
-                fill = GAME_FILL
-                edge = GAME_EDGE
-                hi   = "#F4836A"
+    for player, fill, edge_col, hi in (
+        (1, PLAYER_FILL, PLAYER_EDGE, "#6BAED6"),
+        (2, GAME_FILL,   GAME_EDGE,   "#F4836A"),
+    ):
+        pos = [(x + 0.5, y + 0.5) for y in range(16) for x in range(16) if board[y, x] == player]
+        if not pos:
+            continue
 
-            # Shadow
-            ax.add_patch(patches.Circle(
-                (cx_ + 0.045, cy_ - 0.045), r,
-                color='#00000033', zorder=5
-            ))
-            # Token body
-            ax.add_patch(patches.Circle(
-                (cx_, cy_), r,
-                color=fill, zorder=6
-            ))
-            # Highlight rim
-            ax.add_patch(patches.Circle(
-                (cx_, cy_), r,
-                facecolor='none', edgecolor=edge,
-                linewidth=1.1, zorder=7
-            ))
-            # Inner shine
-            ax.add_patch(patches.Circle(
-                (cx_ - 0.09, cy_ + 0.09), r * 0.38,
-                color=hi, alpha=0.38, zorder=8
-            ))
-            # New token gold ring
-            if is_new:
-                ax.add_patch(patches.Circle(
-                    (cx_, cy_), r + 0.06,
-                    facecolor='none', edgecolor=HIGHLIGHT,
-                    linewidth=1.6, alpha=0.9, zorder=9
-                ))
+        ax.add_collection(PatchCollection(
+            [patches.Circle((cx + 0.045, cy - 0.045), r) for cx, cy in pos],
+            facecolors='#00000033', linewidths=0, zorder=5))
+        ax.add_collection(PatchCollection(
+            [patches.Circle((cx, cy), r) for cx, cy in pos],
+            facecolors=fill, linewidths=0, zorder=6))
+        ax.add_collection(PatchCollection(
+            [patches.Circle((cx, cy), r) for cx, cy in pos],
+            facecolors='none', edgecolors=edge_col, linewidths=1.1, zorder=7))
+        ax.add_collection(PatchCollection(
+            [patches.Circle((cx - 0.09, cy + 0.09), r * 0.38) for cx, cy in pos],
+            facecolors=hi, alpha=0.38, linewidths=0, zorder=8))
+
+    # New-token gold rings
+    if new_set:
+        new_pos = [(x + 0.5, y + 0.5) for x, y in new_set
+                   if 0 <= x < 16 and 0 <= y < 16 and board[y, x] != 0]
+        if new_pos:
+            ax.add_collection(PatchCollection(
+                [patches.Circle((cx, cy), r + 0.06) for cx, cy in new_pos],
+                facecolors='none', edgecolors=HIGHLIGHT, linewidths=1.6, alpha=0.9, zorder=9))
 
     # Coordinate labels
     for i in range(16):
@@ -476,8 +509,25 @@ def draw_board(board, preview_cells=None, new_cells=None, game_over=False):
     return fig
 
 
+@st.cache_data
+def render_board_image(board_bytes: bytes, new_cells_tuple: tuple, game_over: bool) -> bytes:
+    """Render the board to PNG bytes. Cached by board state so input changes are instant."""
+    board = np.frombuffer(board_bytes, dtype=np.int64).reshape(16, 16)
+    new_cells = [list(c) for c in new_cells_tuple] if new_cells_tuple else None
+    fig = draw_board(board, new_cells=new_cells, game_over=game_over)
+    buf = io.BytesIO()
+    fig.savefig(buf, format='png', dpi=100, facecolor=OAK_DARK, edgecolor='none')
+    plt.close(fig)
+    buf.seek(0)
+    return buf.read()
+
+
 # ── SESSION STATE ──────────────────────────────────────────────────
-engine = SixteenSquaredEngine()
+@st.cache_resource
+def _create_engine():
+    return SixteenSquaredEngine()
+
+engine = _create_engine()
 
 if 'board' not in st.session_state:
     st.session_state.board        = np.zeros((16, 16), dtype=int)
@@ -539,10 +589,8 @@ with col_left:
         "Direction",
         options=list(engine.vectors.keys()),
         format_func=lambda x: dir_labels.get(x),
-        disabled=(not game_active or sc <= 1)
+        disabled=(not game_active or sc == 0)
     )
-
-    preview_cells = []
 
     st.markdown('<hr class="divider">', unsafe_allow_html=True)
 
@@ -563,23 +611,24 @@ with col_left:
                     st.warning(reason)
 
                 ai_new_cells = []
-                if engine.should_ai_pass(st.session_state.board, current_tokens, round_num):
-                    st.session_state.ai_message = "The Game chose to pass this round."
-                else:
-                    ai_move = engine.get_ai_move(
-                        st.session_state.board, current_tokens, round_num
-                    )
-                    if ai_move:
-                        _, ai_path, _ = engine.simulate_path(
-                            st.session_state.board, 2,
-                            ai_move[0], ai_move[1], ai_move[2], ai_move[3]
-                        )
-                        ai_new_cells = [(px, py) for px, py in ai_path
-                                        if st.session_state.board[py, px] == 0]
-                        for px, py in ai_path:
-                            st.session_state.board[py, px] = 2
+                with st.spinner("The Game is thinking..."):
+                    if engine.should_ai_pass(st.session_state.board, current_tokens, round_num):
+                        st.session_state.ai_message = "The Game chose to pass this round."
                     else:
-                        st.session_state.ai_message = "The Game found no valid move and was forced to pass."
+                        ai_move = engine.get_ai_move(
+                            st.session_state.board, current_tokens, round_num
+                        )
+                        if ai_move:
+                            _, ai_path, _ = engine.simulate_path(
+                                st.session_state.board, 2,
+                                ai_move[0], ai_move[1], ai_move[2], ai_move[3]
+                            )
+                            ai_new_cells = [(px, py) for px, py in ai_path
+                                            if st.session_state.board[py, px] == 0]
+                            for px, py in ai_path:
+                                st.session_state.board[py, px] = 2
+                        else:
+                            st.session_state.ai_message = "The Game found no valid move and was forced to pass."
 
                 st.session_state.scores   = engine.calculate_scores(st.session_state.board)
                 st.session_state.new_cells = new_player_cells + ai_new_cells
@@ -601,14 +650,12 @@ with col_left:
 
 # ── CENTER COLUMN ──────────────────────────────────────────────────
 with col_center:
-    fig = draw_board(
-        st.session_state.board,
-        preview_cells=preview_cells if game_active else [],
-        new_cells=st.session_state.new_cells if st.session_state.new_cells else None,
-        game_over=not game_active
+    board_img = render_board_image(
+        st.session_state.board.tobytes(),
+        tuple(tuple(c) for c in st.session_state.new_cells) if st.session_state.new_cells else (),
+        not game_active
     )
-    st.pyplot(fig, use_container_width=True)
-    plt.close(fig)
+    st.image(board_img, use_container_width=True)
 
     if not game_active:
         b_s, r_s = st.session_state.scores
