@@ -261,18 +261,98 @@ class SixteenSquaredEngine:
 
         return complete_gain, partial_gain
 
+    def _build_blocking_map(self, board):
+        """
+        Deterministically scan the board for player (1) token chains that are
+        within 1–4 empty cells of completing a border-to-border scoring line.
+        Returns a 16×16 array of pre-scaled blocking bonus values.
+
+        Unlike the heatmap (which samples hypothetical future moves), this method
+        reads actual board state — so it reliably catches lines that are already
+        80–90% built. Urgency values are calibrated against the scoring weights
+        in get_ai_move so that near-complete player threats compete correctly:
+          1 gap  → ×140  blocks a 10-token threat at ~1540, beating a 10-token
+                         AI completion (~1290) — near-mandatory block
+          2 gaps → ×75   blocks a 12-token threat at ~1050, beating medium
+                         scoring but losing to large AI completions
+          3 gaps → ×30   soft hint, usually loses to any scoring move
+          4 gaps → ×15   very low; AI notes it but almost always scores instead
+        The far border cell is included in the gap count when empty because
+        the player must fill it to complete the scoring line.
+        """
+        blocking = np.zeros((16, 16))
+
+        for y in range(16):
+            for x in range(16):
+                if not (self.is_border(x, y) and board[y, x] == 1):
+                    continue
+                for dx, dy in self.vectors.values():
+                    if not self.is_legal_direction(x, y, dx, dy):
+                        continue
+
+                    cx, cy = x, y
+                    player_cells = 0
+                    empty_cells  = []
+                    has_interior = False
+                    reached_far_border = False
+
+                    while 0 <= cx < 16 and 0 <= cy < 16:
+                        if board[cy, cx] == 2:
+                            break  # AI token already blocks this line — skip
+                        if not self.is_border(cx, cy):
+                            has_interior = True
+                        if board[cy, cx] == 1:
+                            player_cells += 1
+                        else:
+                            empty_cells.append((cx, cy))
+                        if self.is_border(cx, cy) and (cx != x or cy != y):
+                            reached_far_border = True
+                            break
+                        cx += dx
+                        cy += dy
+
+                    if not reached_far_border or not has_interior:
+                        continue
+                    total_len = player_cells + len(empty_cells)
+                    if total_len < 3 or len(empty_cells) > 4:
+                        continue
+
+                    # Pre-scaled bonus = potential_line_score × urgency_multiplier.
+                    # Urgency tiers calibrated against complete_gain × 120 scoring
+                    # (see docstring above for derivation).
+                    urgency = {1: 140, 2: 75, 3: 30, 4: 15}[len(empty_cells)]
+                    block_val = total_len * urgency
+                    for ex, ey in empty_cells:
+                        blocking[ey, ex] = max(blocking[ey, ex], block_val)
+
+        return blocking
+
     def get_ai_move(self, board, max_tokens, round_num):
         best_move, best_weight = None, -float('inf')
         threat_map = np.zeros((16, 16))
 
+        # ── Medium-range threat heatmap ────────────────────────────────────────
+        # 150 random (border, direction) samples build a probabilistic heat map of
+        # player-accessible corridors. Cells in many plausible player paths
+        # accumulate threat weight, nudging the AI toward contested regions.
+        # Threshold changed from > 3 to >= 3: a 3-token player path is already
+        # near-complete and worth registering as a genuine threat.
         for _ in range(150):
             tx, ty = self.get_random_border_coord()
             td = random.choice(list(self.vectors.keys()))
             for tc in range(1, max_tokens + 1):
                 ok, t_path, _ = self.simulate_path(board, 1, tx, ty, td, tc)
-                if ok and len(t_path) > 3:
+                if ok and len(t_path) >= 3:
                     for px, py in t_path:
+                        # +12 per cell per sample. Cells in many player paths
+                        # compound, making high-traffic corridors visibly costly
+                        # to leave uncontested.
                         threat_map[py, px] += 12
+
+        # ── Near-complete threat scan ──────────────────────────────────────────
+        # Deterministic — reads actual board state rather than sampling. Catches
+        # lines the heatmap misses when the specific start cell was never sampled.
+        blocking_map = self._build_blocking_map(board)
 
         token_counts = self._get_token_counts(max_tokens, round_num)
 
@@ -282,15 +362,50 @@ class SixteenSquaredEngine:
             tc = random.choice(token_counts)
             ok, path, _ = self.simulate_path(board, 2, ax, ay, ad, tc)
             if ok and path:
+                # Base: raw path length — longer placements are broadly better.
                 weight = len(path)
+
+                # +80 if the path ends on a border square. Necessary (but not
+                # sufficient) condition for a scoring line; kept as a lightweight
+                # directional nudge toward border-to-border moves.
                 if self.is_border(path[-1][0], path[-1][1]):
                     weight += 80
+
+                # +20 per AI token already on board that this path bridges through.
+                # Rewards extending connected groups toward completion at zero extra
+                # token cost — the AI actively nurtures its existing chains.
                 weight += sum(20 for px, py in path if board[py, px] == 2)
+
+                # Heatmap threat blocking: sum threat values for all cells in this
+                # path, scaled by 1.8. Provides a soft nudge toward contesting
+                # high-traffic corridors; not strong enough to override clear
+                # scoring opportunities, but tips close decisions toward defence.
                 weight += sum(threat_map[py, px] for px, py in path) * 1.8
+
+                # Direct blocking bonus: pre-scaled values from _build_blocking_map.
+                # A path covering a 1-gap player threat cell adds ~1300 — enough to
+                # make blocking near-complete lines reliably competitive with most
+                # offensive moves. The AI will never miss an obvious block.
+                weight += sum(blocking_map[py, px] for px, py in path)
+
+                # Late-game bridge bonus (rounds 10+): re-using existing AI tokens
+                # is increasingly valuable as open board space fills up. +15 extra
+                # per bridged token on top of the base +20 above.
                 if round_num >= 10:
                     weight += sum(1 for px, py in path if board[py, px] == 2) * 15
+
+                # ── Scoring evaluation — primary offensive objective ────────────
+                # complete_gain × 120: the dominant signal. Completing a scoring
+                # line (border-to-border, interior-touching, ≥3 tokens) is always
+                # the top priority. A 5-token completion adds 600; a 10-token
+                # completion adds 1200 — both well above any non-blocking move.
+                #
+                # partial_gain × 8: raised from 5. An intermediate AI actively
+                # builds partial lines rather than ignoring half-built progress.
+                # Enough to influence route selection without overriding completions.
                 complete_gain, partial_gain = self._evaluate_scoring(board, path)
-                weight += complete_gain * 120 + partial_gain * 5
+                weight += complete_gain * 120 + partial_gain * 8
+
                 if weight > best_weight:
                     best_weight, best_move = weight, (ax, ay, ad, tc)
 
@@ -300,14 +415,25 @@ class SixteenSquaredEngine:
         if max_tokens <= 2:
             return list(range(0, max_tokens + 1))
         if round_num <= 5:
+            # Early game: assertive, high-volume opening.
+            # [high×4, mid×1] = 80% chance of playing at maximum capacity.
+            # The AI opens boldly, establishing strong cross-board lines from
+            # round 1. Increased from [high×3, mid, 1] (60% max) to match
+            # playtesting feedback: the opening should feel competitive, not timid.
             high = max(1, max_tokens)
             mid  = max(1, max_tokens // 2)
-            return [high, high, high, mid, 1]
+            return [high, high, high, high, mid]
         if round_num <= 10:
+            # Mid game: balanced range. Board space is contested; the AI
+            # evaluates all token counts equally and picks by weight.
             return list(range(1, max_tokens + 1))
+        # Late game: include passing (0). With few tokens remaining a well-placed
+        # pass avoids wasting the last moves on low-value placements.
         return list(range(0, max_tokens + 1))
 
     def should_ai_pass(self, board, max_tokens, round_num):
+        # Only consider passing in the final two rounds (max_tokens ≤ 2).
+        # With 3+ tokens there is almost always a worthwhile move available.
         if max_tokens > 2:
             return False
         best_move = self.get_ai_move(board, max_tokens, round_num)
@@ -316,6 +442,12 @@ class SixteenSquaredEngine:
         _, path, _ = self.simulate_path(board, 2, best_move[0], best_move[1], best_move[2], best_move[3])
         if not path:
             return True
+        # Pass only if the best available move does none of:
+        #   (a) complete a scoring line (path ends on far border)
+        #   (b) place a token directly adjacent to a player token (proximity block)
+        #   (c) bridge through existing AI tokens (free positional extension)
+        # This ensures the AI stays active when it matters and avoids burning
+        # its last tokens on purely neutral moves.
         completes_line = self.is_border(path[-1][0], path[-1][1]) if path else False
         blocks_threat  = any(
             any(0 <= px + ddx < 16 and 0 <= py + ddy < 16 and board[py + ddy, px + ddx] == 1
