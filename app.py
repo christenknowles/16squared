@@ -261,6 +261,79 @@ class SixteenSquaredEngine:
 
         return complete_gain, partial_gain
 
+    def _evaluate_territory_denial(self, board, path):
+        """Returns the number of unique player border-start corridors that newly
+        placed tokens in `path` would physically block.
+
+        A corridor is a straight line (any of the 8 directions) that:
+          - starts at a player-reachable border cell (board value 0 or 1)
+          - passes through at least one interior cell
+          - ends at the far border
+          - has no existing AI token already blocking it
+
+        For each empty cell in path (new AI placement), we walk back along each
+        direction to find a border start, then forward to the far border. If the
+        corridor is valid and unblocked, it is added to a deduplication set.
+
+        Only new placements (board[py,px]==0) contribute — bridging through
+        existing AI tokens does not add new denials.
+
+        Returns the count of unique denied corridors.
+        """
+        denied = set()
+        for px, py in path:
+            if board[py, px] != 0:
+                continue  # only newly placed tokens block corridors
+            for dx, dy in self.vectors.values():
+                # Walk backward to find a border start cell for this corridor.
+                # Use an explicit found flag — Python while-else fires on natural
+                # loop exit (including when is_border() becomes True), which would
+                # incorrectly skip valid corridors.
+                bx, by = px - dx, py - dy
+                found_start = False
+                while 0 <= bx < 16 and 0 <= by < 16:
+                    if self.is_border(bx, by):
+                        found_start = True
+                        break
+                    if board[by, bx] == 2:  # AI token blocks this backward path
+                        break
+                    bx -= dx
+                    by -= dy
+                if not found_start:
+                    continue  # walked off board or hit AI token — no valid start
+                if board[by, bx] == 2:
+                    continue  # AI token at start border — corridor already blocked
+                if not self.is_legal_direction(bx, by, dx, dy):
+                    continue
+
+                # Walk forward from the new cell to find the far border.
+                fx, fy = px + dx, py + dy
+                found_end = False
+                while 0 <= fx < 16 and 0 <= fy < 16:
+                    if self.is_border(fx, fy):
+                        found_end = True
+                        break
+                    if board[fy, fx] == 2:  # AI token blocks this forward path
+                        break
+                    fx += dx
+                    fy += dy
+                if not found_end:
+                    continue  # walked off board or hit AI token — no valid end
+                if board[fy, fx] == 2:
+                    continue  # AI token at far border
+
+                # Require at least one interior cell between the two borders.
+                # Adjacent-border corridors (bx+dx==fx and by+dy==fy) are trivial.
+                if bx + dx == fx and by + dy == fy:
+                    continue
+
+                # Deduplicate: same corridor walked from either end must match.
+                # Sort endpoints and use abs(dx),abs(dy) so NE and SW give same id.
+                ep = tuple(sorted([(bx, by), (fx, fy)]))
+                corridor_id = (ep, (abs(dx), abs(dy)))
+                denied.add(corridor_id)
+        return len(denied)
+
     def _build_blocking_map(self, board):
         """
         Deterministically scan the board for player (1) token chains that are
@@ -356,12 +429,55 @@ class SixteenSquaredEngine:
 
         token_counts = self._get_token_counts(max_tokens, round_num)
 
+        # ── 90/10 Strategic Framework ──────────────────────────────────────────
+        # Diagonal lines (NE/NW/SE/SW) are 90% a SCORING tool.
+        # Cardinal lines (N/S/E/W) are 90% a TERRITORY CONTROL tool.
+        # Weights reflect this: diagonals prioritise completion bonuses;
+        # cardinals prioritise blocking + territory denial with lighter scoring.
+        CARDINALS = {'N', 'S', 'E', 'W'}
+
+        # ── Two-Phase Opening Principle ────────────────────────────────────────
+        # The opening (rounds 1–5) follows a deliberate two-phase strategy:
+        #
+        # PHASE 1 — Round 1 (max_tokens=15): Diagonal Anchor
+        #   The AI strongly favours establishing one long diagonal line across
+        #   the board. Diagonal scoring weights are boosted by ×1.3 to make a
+        #   border-to-border diagonal the dominant opening move. This anchors
+        #   the AI's scoring position from the very first turn and gives it a
+        #   structural lead the opponent must respond to.
+        #
+        # PHASE 2 — Rounds 2–5 (max_tokens 14–11): Cardinal Wall Building
+        #   Having planted a diagonal anchor, the AI shifts to building cardinal
+        #   (N/S/E/W) walls. Territory denial weight is boosted by an additional
+        #   ×1.5 (effective denial weight = ×22 × 1.5 = ×33) to make wide
+        #   horizontal or vertical placements the preferred choice during these
+        #   rounds. These walls compress the opponent's available diagonal
+        #   corridors, protecting the anchor and limiting the opponent's scoring
+        #   angles before they can establish their own long lines.
+        #
+        # PHASE 3 — Rounds 6+ (max_tokens ≤10): Standard Weights
+        #   As the board fills the two-phase logic gives way to the standard
+        #   90/10 direction-aware weights. The mid-game is evaluated on its
+        #   merits: diagonals for scoring, cardinals for territory control,
+        #   near-complete blocking maps for threat response.
+        if max_tokens == 15:       # Round 1 — Diagonal Anchor phase
+            diag_score_mult = 1.3
+            denial_mult     = 1.0
+        elif max_tokens >= 11:     # Rounds 2–5 — Cardinal Wall phase
+            diag_score_mult = 1.0
+            denial_mult     = 1.5
+        else:                      # Rounds 6+ — Standard play
+            diag_score_mult = 1.0
+            denial_mult     = 1.0
+
         for _ in range(600):
             ax, ay = self.get_random_border_coord()
             ad = random.choice(list(self.vectors.keys()))
             tc = random.choice(token_counts)
             ok, path, _ = self.simulate_path(board, 2, ax, ay, ad, tc)
             if ok and path:
+                is_cardinal = ad in CARDINALS
+
                 # Base: raw path length — longer placements are broadly better.
                 weight = len(path)
 
@@ -394,17 +510,45 @@ class SixteenSquaredEngine:
                 if round_num >= 10:
                     weight += sum(1 for px, py in path if board[py, px] == 2) * 15
 
-                # ── Scoring evaluation — primary offensive objective ────────────
-                # complete_gain × 120: the dominant signal. Completing a scoring
-                # line (border-to-border, interior-touching, ≥3 tokens) is always
-                # the top priority. A 5-token completion adds 600; a 10-token
-                # completion adds 1200 — both well above any non-blocking move.
-                #
-                # partial_gain × 8: raised from 5. An intermediate AI actively
-                # builds partial lines rather than ignoring half-built progress.
-                # Enough to influence route selection without overriding completions.
                 complete_gain, partial_gain = self._evaluate_scoring(board, path)
-                weight += complete_gain * 120 + partial_gain * 8
+
+                if is_cardinal:
+                    # ── Cardinal (N/S/E/W) — territory control primary ──────────
+                    # Cardinals score at only 7-8% efficiency (vs 60%+ for diagonals)
+                    # so their value is in denying corridors to the player, not scoring.
+                    #
+                    # complete_gain × 80: still rewarded for the rare cardinal completion,
+                    # but at 2/3 the diagonal rate — cardinals score so infrequently that
+                    # inflating this bonus would distort move selection.
+                    #
+                    # partial_gain × 4: minimal — half-built cardinal lines rarely become
+                    # scoring lines and should not be chased for their own sake.
+                    #
+                    # territory_denial × 22: raised from ×15. The primary signal for
+                    # cardinals. A 10-token horizontal wall denying ~10 corridors on
+                    # average adds 220 base, making cardinals meaningfully competitive
+                    # with diagonal partials. In the Cardinal Wall phase (rounds 2–5),
+                    # denial_mult = 1.5 raises the effective weight to ×33, strongly
+                    # favouring wide wall placements to compress the opponent's angles.
+                    territory_denial = self._evaluate_territory_denial(board, path)
+                    weight += (complete_gain * 80 + partial_gain * 4
+                               + territory_denial * 22 * denial_mult)
+                else:
+                    # ── Diagonal (NE/NW/SE/SW) — scoring primary ───────────────
+                    # Diagonals score at 60%+ efficiency and are the AI's primary
+                    # way to accumulate points.
+                    #
+                    # complete_gain × 140 × diag_score_mult: the dominant signal.
+                    # In the Diagonal Anchor phase (round 1), diag_score_mult = 1.3
+                    # raises the effective multiplier to ×182, making a long border-
+                    # to-border diagonal the overwhelming opening priority. In all
+                    # other rounds diag_score_mult = 1.0 (standard ×140).
+                    #
+                    # partial_gain × 10 × diag_score_mult: similarly boosted in
+                    # round 1 to strongly prefer diagonal routes even when they are
+                    # partial, nudging the AI toward extending its diagonal anchor.
+                    weight += (complete_gain * 140 * diag_score_mult
+                               + partial_gain * 10 * diag_score_mult)
 
                 if weight > best_weight:
                     best_weight, best_move = weight, (ax, ay, ad, tc)

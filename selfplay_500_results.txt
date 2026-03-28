@@ -1,0 +1,222 @@
+Running 500 AI vs AI games...
+   10/500  (17s elapsed, ~841s remaining)
+   20/500  (34s elapsed, ~821s remaining)
+   30/500  (51s elapsed, ~802s remaining)
+   40/500  (67s elapsed, ~774s remaining)
+   50/500  (84s elapsed, ~752s remaining)
+   60/500  (97s elapsed, ~714s remaining)
+   70/500  (111s elapsed, ~681s remaining)
+   80/500  (124s elapsed, ~652s remaining)
+   90/500  (138s elapsed, ~630s remaining)
+  100/500  (152s elapsed, ~607s remaining)
+  110/500  (165s elapsed, ~586s remaining)
+  120/500  (179s elapsed, ~568s remaining)
+  130/500  (193s elapsed, ~550s remaining)
+  140/500  (207s elapsed, ~531s remaining)
+  150/500  (220s elapsed, ~513s remaining)
+  160/500  (234s elapsed, ~496s remaining)
+  170/500  (248s elapsed, ~481s remaining)
+  180/500  (262s elapsed, ~465s remaining)
+  190/500  (276s elapsed, ~451s remaining)
+  200/500  (289s elapsed, ~434s remaining)
+  210/500  (303s elapsed, ~418s remaining)
+  220/500  (316s elapsed, ~403s remaining)
+  230/500  (330s elapsed, ~387s remaining)
+  240/500  (344s elapsed, ~372s remaining)
+  250/500  (358s elapsed, ~358s remaining)
+  260/500  (374s elapsed, ~345s remaining)
+  270/500  (391s elapsed, ~333s remaining)
+  280/500  (404s elapsed, ~318s remaining)
+  290/500  (418s elapsed, ~302s remaining)
+  300/500  (431s elapsed, ~287s remaining)
+  310/500  (445s elapsed, ~273s remaining)
+  320/500  (459s elapsed, ~258s remaining)
+  330/500  (472s elapsed, ~243s remaining)
+  340/500  (486s elapsed, ~229s remaining)
+  350/500  (500s elapsed, ~214s remaining)
+  360/500  (513s elapsed, ~200s remaining)
+  370/500  (527s elapsed, ~185s remaining)
+  380/500  (542s elapsed, ~171s remaining)
+  390/500  (556s elapsed, ~157s remaining)
+  400/500  (569s elapsed, ~142s remaining)
+  410/500  (583s elapsed, ~128s remaining)
+  420/500  (596s elapsed, ~114s remaining)
+  430/500  (610s elapsed, ~99s remaining)
+  440/500  (623s elapsed, ~85s remaining)
+  450/500  (638s elapsed, ~71s remaining)
+  460/500  (651s elapsed, ~57s remaining)
+  470/500  (663s elapsed, ~42s remaining)
+  480/500  (676s elapsed, ~28s remaining)
+  490/500  (689s elapsed, ~14s remaining)
+  500/500  (701s elapsed, ~0s remaining)
+All 500 games complete in 701.4s.
+
+
+══════════════════════════════════════════════════════════════════════
+  16 SQUARED — AI SELF-PLAY ANALYSIS REPORT
+  500 games  ·  AI-A vs AI-B  ·  alternating first player
+══════════════════════════════════════════════════════════════════════
+
+┌─ GAME RESULTS ────────────────────────────────────────────────────────
+  First mover  (P1) wins : 332 / 500  (66.4%)
+  Second mover (P2) wins : 149 / 500  (29.8%)
+  Draws                  :  19 / 500  (3.8%)
+
+  Average final score  —  P1: 62.9   P2: 53.8
+  Highest single score : 133
+  Lowest  single score : 0
+  Biggest  win margin  : 73 pts
+  Smallest win margin  : 1 pts
+  Average win margin   : 17.0 pts
+
+  Score distribution (both sides, all 100 games):
+      0–  9 pts :  28  ██████████████
+     10– 19 pts :  39  ███████████████████
+     20– 29 pts :  49  ████████████████████████
+     30– 39 pts : 103  ███████████████████████████████████████████████████
+     40– 49 pts : 139  █████████████████████████████████████████████████████████████████████
+     50– 59 pts : 139  █████████████████████████████████████████████████████████████████████
+     60– 69 pts : 168  ████████████████████████████████████████████████████████████████████████████████████
+     70– 79 pts : 161  ████████████████████████████████████████████████████████████████████████████████
+     80– 89 pts :  96  ████████████████████████████████████████████████
+     90– 99 pts :  37  ██████████████████
+    100–109 pts :  17  ████████
+    110–119 pts :  16  ████████
+    120–129 pts :   6  ███
+    130–139 pts :   2  █
+
+┌─ FIRST PLAYER ADVANTAGE ──────────────────────────────────────────────
+  Win rate — first mover  : 66.4%
+  Win rate — second mover : 29.8%
+  Avg score — first mover : 62.9
+  Avg score — second mover: 53.8
+  Score gap (1st − 2nd)    : +9.1 pts
+
+  Assessment   : SIGNIFICANT first-player advantage.
+  Recommendation: Recommend a compensation rule before public beta testing.
+
+┌─ STRATEGIC PATTERNS ──────────────────────────────────────────────────
+  Most-used starting border squares (top 12):
+    ( 1,14)  →   312 uses
+    ( 1, 3)  →   308 uses
+    (16,14)  →   306 uses
+    ( 3, 1)  →   305 uses
+    (14, 1)  →   305 uses
+    ( 3,16)  →   297 uses
+    (16, 3)  →   290 uses
+    (14,16)  →   290 uses
+    (16,13)  →   290 uses
+    ( 1,13)  →   286 uses
+    ( 4,16)  →   279 uses
+    (16, 4)  →   275 uses
+
+  Direction usage vs scoring efficiency:
+    N   used 1055  scored  79  ( 7.5% scoring rate)  ████████████████████████████████████████████████████
+    S   used 1085  scored  75  ( 6.9% scoring rate)  ██████████████████████████████████████████████████████
+    E   used 1085  scored  79  ( 7.3% scoring rate)  ██████████████████████████████████████████████████████
+    W   used 1102  scored  84  ( 7.6% scoring rate)  ███████████████████████████████████████████████████████
+    NE  used 2653  scored 1568  (59.1% scoring rate)  ████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████
+    NW  used 2699  scored 1647  (61.0% scoring rate)  ██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████
+    SE  used 2741  scored 1690  (61.7% scoring rate)  █████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████
+    SW  used 2578  scored 1574  (61.1% scoring rate)  ████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████
+
+  Average scoring lines per game — P1: 7.27   P2: 6.45
+
+  Score gained per round (both players combined, all games):
+    Round  1  + 7306 pts  █████████████████████████████████████████████████████████████████████████
+    Round  2  + 7919 pts  ███████████████████████████████████████████████████████████████████████████████  ← peak
+    Round  3  + 6930 pts  █████████████████████████████████████████████████████████████████████
+    Round  4  + 5952 pts  ███████████████████████████████████████████████████████████
+    Round  5  + 6047 pts  ████████████████████████████████████████████████████████████
+    Round  6  + 5629 pts  ████████████████████████████████████████████████████████
+    Round  7  + 4683 pts  ██████████████████████████████████████████████
+    Round  8  + 4101 pts  █████████████████████████████████████████
+    Round  9  + 3316 pts  █████████████████████████████████
+    Round 10  + 2908 pts  █████████████████████████████
+    Round 11  + 1871 pts  ██████████████████
+    Round 12  + 1184 pts  ███████████
+    Round 13  +  401 pts  ████
+    Round 14  +   92 pts  
+    Round 15  +    0 pts  
+
+┌─ BOARD LOCKUP ANALYSIS ───────────────────────────────────────────────
+  Double-passes per round (both players passed in same round):
+    Round  1 :   0 ( 0.0%)  
+    Round  2 :   0 ( 0.0%)  
+    Round  3 :   0 ( 0.0%)  
+    Round  4 :   0 ( 0.0%)  
+    Round  5 :   0 ( 0.0%)  
+    Round  6 :   0 ( 0.0%)  
+    Round  7 :   0 ( 0.0%)  
+    Round  8 :   0 ( 0.0%)  
+    Round  9 :   0 ( 0.0%)  
+    Round 10 :   0 ( 0.0%)  
+    Round 11 :   0 ( 0.0%)  
+    Round 12 :   0 ( 0.0%)  
+    Round 13 :   0 ( 0.0%)  
+    Round 14 :   0 ( 0.0%)  
+    Round 15 :   0 ( 0.0%)  
+
+  Unused tokens per round (both players combined):
+    Round  1 :  1091/15000 unused (  7.3%)  █
+    Round  2 :  1512/14000 unused ( 10.8%)  ██
+    Round  3 :  2014/13000 unused ( 15.5%)  ███
+    Round  4 :  2556/12000 unused ( 21.3%)  ████
+    Round  5 :  2970/11000 unused ( 27.0%)  █████
+    Round  6 :  4193/10000 unused ( 41.9%)  ████████
+    Round  7 :  3650/ 9000 unused ( 40.6%)  ████████
+    Round  8 :  3140/ 8000 unused ( 39.2%)  ███████
+    Round  9 :  2745/ 7000 unused ( 39.2%)  ███████
+    Round 10 :  2397/ 6000 unused ( 40.0%)  ███████
+    Round 11 :  2037/ 5000 unused ( 40.7%)  ████████
+    Round 12 :  1494/ 4000 unused ( 37.4%)  ███████
+    Round 13 :  1026/ 3000 unused ( 34.2%)  ██████
+    Round 14 :   565/ 2000 unused ( 28.2%)  █████
+    Round 15 :     0/ 1000 unused (  0.0%)  
+
+  Games with ≥2 double-passes in rounds 7–10 : 0 (0.0%)
+  Overall token waste rate                  : 31390/120000 (26.2%)
+
+  RECOMMENDATION: Board lockup is rare. Current token structure
+  and board size appear healthy for 15-round games.
+
+┌─ AI BEHAVIOR ─────────────────────────────────────────────────────────
+  First mover (P1):
+    Pass rate        : 1/7500 rounds (0.0%)
+    Avg tokens/round : 6.0
+    Token waste      : 14657/60000 (24.4%)
+    Blocking moves   : 1066/7499 (14.2%)
+    Offensive moves  : 6433/7499 (85.8%)
+
+  Second mover (P2):
+    Pass rate        : 1/7500 rounds (0.0%)
+    Avg tokens/round : 5.8
+    Token waste      : 16733/60000 (27.9%)
+    Blocking moves   : 1370/7499 (18.3%)
+    Offensive moves  : 6129/7499 (81.7%)
+
+
+┌─ BALANCE ASSESSMENT ──────────────────────────────────────────────────
+  Average combined score per game : 116.7 pts
+  Average score differential      : 17.0 pts
+  Score range (single player)     : 0 – 133 pts
+
+  Scoring level : Healthy for a strategy game of this length.
+
+  Structural notes:
+  • First mover wins consistently more often. A compensation rule
+    (e.g. second player gets a small bonus) may be worth testing.
+  • Blocking rate of 16.2% reflects a healthy offense/defense mix.
+  • Token utilisation is healthy (74% of tokens placed).
+
+  OVERALL BALANCE VERDICT:
+  ⚠ First-mover win rate outside 40–60% range. Consider a small
+    compensation rule before broad beta release.
+
+  MID-GAME LOCKUP VERDICT:
+  ✓ Mid-game lockup is not a significant issue in the current config.
+
+══════════════════════════════════════════════════════════════════════
+  End of report.
+══════════════════════════════════════════════════════════════════════
+

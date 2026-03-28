@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(kill %1)",
-      "Bash(python -c \":*)"
+      "Bash(python -c \":*)",
+      "Bash(python selfplay.py)",
+      "Bash(python:*)"
     ]
   }
 }
