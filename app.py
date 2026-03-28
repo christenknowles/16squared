@@ -314,8 +314,8 @@ class SixteenSquaredEngine:
                     if not reached_far_border or not has_interior:
                         continue
                     total_len = player_cells + len(empty_cells)
-                    if total_len < 3 or len(empty_cells) > 4:
-                        continue
+                    if total_len < 3 or not (1 <= len(empty_cells) <= 4):
+                        continue  # skip complete lines (0 gaps) and distant lines (5+ gaps)
 
                     # Pre-scaled bonus = potential_line_score × urgency_multiplier.
                     # Urgency tiers calibrated against complete_gain × 120 scoring
