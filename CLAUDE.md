@@ -18,16 +18,16 @@ Performance, UI responsiveness, and clean session state management are prioritie
 - NumPy (board state as a 16x16 array)
 
 ## How to run locally
-python -m streamlit run game.py
+python -m streamlit run app.py
 
 ## How to install dependencies
 python -m pip install streamlit matplotlib numpy
 
 ## Project files
-- game.py — entire game in one file (engine, AI, UI, board drawing)
+- app.py — entire game in one file (engine, AI, UI, board drawing)
 - CLAUDE.md — this file
 
-## Key systems in game.py
+## Key systems in app.py
 - SixteenSquaredEngine — core game logic class
   - simulate_path() — validates and traces token placement paths
   - get_ai_move() — AI move selection (600 random samples, weighted scoring)
@@ -46,7 +46,7 @@ python -m pip install streamlit matplotlib numpy
 - Border squares: x==0, x==15, y==0, or y==15
 
 ## After every change
-Always run the game with `python -m streamlit run game.py` and confirm no errors
+Always run the game with `python -m streamlit run app.py` and confirm no errors
 appear in the terminal. Report any Python errors or Streamlit warnings found.
 
 ## Goals for improvement
