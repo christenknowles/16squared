@@ -1,5 +1,4 @@
 import io
-import os
 import streamlit as st
 import numpy as np
 import random
@@ -139,29 +138,6 @@ st.markdown("""
     .gameover-lose { background: linear-gradient(135deg,#8B1A1A,#C0392B); color:#fff; }
     .gameover-tie  { background: linear-gradient(135deg,#5C4A1E,#8B6914); color:#fff; }
 
-    /* AI narrative & taunt message boxes */
-    .taunt-box {
-        background: linear-gradient(135deg, #3D0A0A 0%, #6B1A1A 100%);
-        border: 1px solid #E05A4A;
-        border-left: 4px solid #E05A4A;
-        border-radius: 8px;
-        padding: 10px 12px;
-        margin: 6px 0;
-        font-family: 'Crimson Pro', Georgia, serif;
-        font-size: 0.85rem;
-        color: #FAD5CC;
-        font-style: italic;
-        box-shadow: 0 2px 8px rgba(139,26,26,0.35);
-    }
-    .taunt-label {
-        font-family: 'Playfair Display', serif;
-        font-size: 0.62rem;
-        font-weight: 700;
-        letter-spacing: 0.18em;
-        text-transform: uppercase;
-        color: #E05A4A;
-        margin-bottom: 3px;
-    }
     .early-end-box {
         background: linear-gradient(160deg, #2C1810 0%, #4A2E10 100%);
         border: 2px solid #C4A265;
@@ -182,40 +158,6 @@ st.markdown("""
         text-transform: uppercase;
         color: #C4A265;
         margin-bottom: 6px;
-    }
-    .narrative-banner {
-        font-family: 'Crimson Pro', Georgia, serif;
-        font-size: 1.05rem;
-        font-weight: 500;
-        text-align: center;
-        padding: 14px 18px;
-        border-radius: 10px;
-        line-height: 1.5;
-        margin-top: 10px;
-        font-style: italic;
-    }
-    .narrative-win  { background: linear-gradient(135deg,#1B3A1E,#2C5F2E); color:#D4F0D6; border: 1px solid #4A9D5A; }
-    .narrative-lose { background: linear-gradient(135deg,#3D0A0A,#8B1A1A); color:#FAD5CC; border: 1px solid #E05A4A; }
-    .narrative-tie  { background: linear-gradient(135deg,#2C1F00,#5C4A1E); color:#F5ECD7; border: 1px solid #C4A265; }
-    .name-input-box {
-        margin-top: 10px;
-        padding-top: 8px;
-    }
-    .name-input-label {
-        font-family: 'Playfair Display', serif;
-        font-size: 0.82rem;
-        font-weight: 600;
-        letter-spacing: 0.06em;
-        color: #4A2E10;
-        margin-bottom: 4px;
-        font-style: italic;
-    }
-    .stTextInput input {
-        font-family: 'Crimson Pro', serif !important;
-        background: rgba(255,255,255,0.55) !important;
-        border: 1px solid #C4A265 !important;
-        border-radius: 5px !important;
-        color: #2C1810 !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -886,35 +828,6 @@ def _create_engine():
 engine = _create_engine()
 
 
-# ── AI NARRATIVE SYSTEM ─────────────────────────────────────────────
-# For Streamlit Cloud: add ANTHROPIC_API_KEY to app secrets in the
-# Streamlit Cloud dashboard under Settings > Secrets.
-# For local testing: set the env var ANTHROPIC_API_KEY or add it to
-# a .streamlit/secrets.toml file as: ANTHROPIC_API_KEY = "sk-ant-..."
-
-def _call_claude(prompt: str, fallback: str) -> str:
-    """Call Claude Haiku with the given prompt. Returns fallback on any error."""
-    try:
-        try:
-            api_key = os.environ.get("ANTHROPIC_API_KEY", "")
-            if not api_key:
-                api_key = st.secrets.get("ANTHROPIC_API_KEY", "")
-        except Exception:
-            api_key = os.environ.get("ANTHROPIC_API_KEY", "")
-        if not api_key:
-            return fallback
-        import anthropic as _anthropic
-        client = _anthropic.Anthropic(api_key=api_key)
-        response = client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=150,
-            messages=[{"role": "user", "content": prompt}]
-        )
-        return response.content[0].text.strip()
-    except Exception:
-        return fallback
-
-
 def _has_any_meaningful_move(board: np.ndarray, player: int, max_tokens: int) -> bool:
     """Return True if the given player has at least one meaningful move.
 
@@ -955,104 +868,15 @@ def _has_any_meaningful_move(board: np.ndarray, player: int, max_tokens: int) ->
     return False
 
 
-def _generate_taunt(player_name: str, ai_pts: int, player_pts: int) -> str:
-    prompt = (
-        f"You are The Game — a mysterious AI opponent in a strategy board game called 16 Squared. "
-        f"The player's name is {player_name}. You just scored {ai_pts} points this round while "
-        f"{player_name} scored {player_pts}. Generate a single short taunt (1-2 sentences maximum). "
-        f"Mix medieval/dramatic, casual, and humorous tones. Be playful not mean. "
-        f"Address the player by name. Keep it short and punchy."
-    )
-    fallback = (
-        f"Another square falls to The Game, {player_name}. "
-        f"Your tokens are brave — but mine are inevitable."
-    )
-    return _call_claude(prompt, fallback)
-
-
-def _generate_early_end_msg(player_name: str) -> str:
-    prompt = (
-        f"You are the narrator of a strategic board game called 16 Squared. "
-        f"The player's name is {player_name}. The board has reached a point where neither player "
-        f"has any moves that would score points or block the opponent. Generate a single short message "
-        f"(2-3 sentences) to offer the option to end the game early. Mix medieval/dramatic, casual "
-        f"friendly, and lightly humorous tones. Reference the battlefield or tokens creatively. "
-        f"Address the player by name. Do not use the word stalemate. "
-        f"End with a question asking if they would like to call the game."
-    )
-    fallback = (
-        f"The battlefield grows quiet, {player_name}. Tokens stand sentinel across the grid, "
-        f"but neither army has a worthy advance remaining. "
-        f"Shall we count the spoils and call this battle?"
-    )
-    return _call_claude(prompt, fallback)
-
-
-def _generate_victory_msg(player_name: str, player_score: int, game_score: int) -> str:
-    margin = player_score - game_score
-    style = "dominant" if margin > 30 else ("hard-fought" if margin < 10 else "decisive")
-    prompt = (
-        f"You are the narrator of 16 Squared. The player {player_name} just defeated The Game "
-        f"with a final score of {player_score} to {game_score}. Generate a short victory message "
-        f"(2-3 sentences). "
-        f"{'If the margin is greater than 30 points call it a dominant victory.' if margin > 30 else ''}"
-        f"{'If less than 10 points call it a hard-fought victory.' if margin < 10 else ''}"
-        f"Mix medieval/dramatic, casual, and humorous tones. Address the player by name."
-    )
-    fallbacks = {
-        "dominant": f"A crushing triumph, {player_name}! The Game lay defeated across the grid, its tokens swept aside by your relentless advance. The battlefield is yours — and history will remember.",
-        "hard-fought": f"By the thinnest of margins, {player_name}, the grid is yours! The Game pushed back with everything it had, but your final line held true. A hard-fought victory worth celebrating.",
-        "decisive": f"Well played, {player_name}. The Game fought hard but your strategy proved superior. The grid bows to a worthy master today.",
-    }
-    return _call_claude(prompt, fallbacks[style])
-
-
-def _generate_defeat_msg(player_name: str, player_score: int, game_score: int) -> str:
-    margin = game_score - player_score
-    prompt = (
-        f"You are the narrator of 16 Squared. The player {player_name} was defeated by The Game "
-        f"with a final score of {game_score} to {player_score}. Generate a short defeat message "
-        f"(2-3 sentences). "
-        f"{'If the margin is greater than 30 points call it a crushing defeat.' if margin > 30 else ''}"
-        f"{'If less than 10 points call it a narrow defeat.' if margin < 10 else ''}"
-        f"Mix medieval/dramatic, casual, and humorous tones. Address the player by name. "
-        f"Be sympathetic but a little dramatic."
-    )
-    fallbacks_d = {
-        True:  f"A crushing defeat, {player_name}. The Game swept the battlefield like an autumn storm, leaving your tokens scattered and your lines unfinished. The grid shows no mercy — but neither does the next game.",
-        False: f"So close, {player_name}, and yet the grid slipped away. The Game claimed victory by a whisper — a single line, a handful of tokens. Rest, reflect, and return.",
-    }
-    return _call_claude(prompt, fallbacks_d[margin > 10])
-
-
-def _generate_draw_msg(player_name: str, score: int) -> str:
-    prompt = (
-        f"You are the narrator of 16 Squared. The player {player_name} and The Game have tied "
-        f"with a score of {score} each. Generate a short draw message (2-3 sentences). "
-        f"Mix medieval/dramatic, casual, and humorous tones. Address the player by name."
-    )
-    fallback = (
-        f"An extraordinary result, {player_name} — {score} points apiece, the grid split perfectly "
-        f"between mortal and machine. The Game is... impressed. (It would never admit it, of course.)"
-    )
-    return _call_claude(prompt, fallback)
-
-
 if 'board' not in st.session_state:
-    st.session_state.board               = np.zeros((16, 16), dtype=int)
-    st.session_state.turn                = 0
-    st.session_state.token_groups        = list(range(15, 0, -1))
-    st.session_state.scores              = (0, 0)
-    st.session_state.ai_message          = None
-    st.session_state.new_cells           = []
-    st.session_state.player_name         = "Challenger"
-    st.session_state.taunt_msg           = None
-    st.session_state.early_end_prompt    = None
+    st.session_state.board                = np.zeros((16, 16), dtype=int)
+    st.session_state.turn                 = 0
+    st.session_state.token_groups         = list(range(15, 0, -1))
+    st.session_state.scores               = (0, 0)
+    st.session_state.ai_message           = None
+    st.session_state.new_cells            = []
+    st.session_state.early_end_prompt     = False
     st.session_state.early_end_skip_until = 0
-    st.session_state.narrative_msg       = None
-    st.session_state.narrative_css       = None
-    st.session_state.narrative_icon      = None
-    st.session_state.balloons_shown      = False
 
 # ── LAYOUT ─────────────────────────────────────────────────────────
 col_left, col_center, col_right = st.columns([1, 2.4, 1])
@@ -1068,11 +892,10 @@ with col_left:
     st.markdown('<div class="game-subtitle">Build Your Path · Block Theirs</div>', unsafe_allow_html=True)
 
     b_s, r_s = st.session_state.scores
-    _pname_display = st.session_state.player_name[:8] if st.session_state.player_name else "Challenger"
     st.markdown(f"""
     <div class="score-row">
         <div class="score-card player">
-            <div class="score-label">{_pname_display}</div>
+            <div class="score-label">Player</div>
             <div class="score-value">{b_s}</div>
         </div>
         <div class="score-card game">
@@ -1088,13 +911,6 @@ with col_left:
     if st.session_state.ai_message:
         st.info(st.session_state.ai_message)
         st.session_state.ai_message = None
-
-    if st.session_state.taunt_msg:
-        st.markdown(
-            f'<div class="taunt-box"><div class="taunt-label">The Game speaks</div>{st.session_state.taunt_msg}</div>',
-            unsafe_allow_html=True
-        )
-        st.session_state.taunt_msg = None
 
     sx = st.number_input("X Start (Horizontal)", 1, 16, 1, disabled=not game_active)
     sy = st.number_input("Y Start (Vertical)",   1, 16, 1, disabled=not game_active)
@@ -1127,8 +943,6 @@ with col_left:
                 st.session_state.board, 1, sx, sy, sd, sc
             )
             if ok:
-                scores_before = engine.calculate_scores(st.session_state.board)
-
                 new_player_cells = [(px, py) for px, py in path
                                     if st.session_state.board[py, px] == 0]
                 for px, py in path:
@@ -1136,8 +950,6 @@ with col_left:
 
                 if reason:
                     st.warning(reason)
-
-                scores_mid = engine.calculate_scores(st.session_state.board)
 
                 ai_new_cells = []
                 with st.spinner("The Game is thinking..."):
@@ -1159,23 +971,13 @@ with col_left:
                         else:
                             st.session_state.ai_message = "The Game found no valid move and was forced to pass."
 
-                scores_after = engine.calculate_scores(st.session_state.board)
-                ai_pts     = scores_after[1] - scores_mid[1]
-                player_pts = scores_after[0] - scores_mid[0]
-
-                # Taunt: ~25% chance when AI scores in round 2+
-                if round_num >= 2 and ai_pts > 0 and random.random() < 0.25:
-                    st.session_state.taunt_msg = _generate_taunt(
-                        st.session_state.player_name, ai_pts, player_pts
-                    )
-
                 # Early-end detection: from round 6 onward, outside skip window
                 next_turn = st.session_state.turn + 1
                 next_round = next_turn + 1
                 next_tokens = st.session_state.token_groups[next_turn] if next_turn < 15 else 0
                 if (round_num >= 6
                         and next_round > st.session_state.early_end_skip_until
-                        and st.session_state.early_end_prompt is None
+                        and not st.session_state.early_end_prompt
                         and next_tokens > 0):
                     player_has_move = _has_any_meaningful_move(
                         st.session_state.board, 1, next_tokens
@@ -1184,11 +986,9 @@ with col_left:
                         st.session_state.board, 2, next_tokens
                     )
                     if not player_has_move and not ai_has_move:
-                        st.session_state.early_end_prompt = _generate_early_end_msg(
-                            st.session_state.player_name
-                        )
+                        st.session_state.early_end_prompt = True
 
-                st.session_state.scores    = scores_after
+                st.session_state.scores    = engine.calculate_scores(st.session_state.board)
                 st.session_state.new_cells = new_player_cells + ai_new_cells
                 st.session_state.turn += 1
                 st.rerun()
@@ -1196,19 +996,14 @@ with col_left:
                 st.error(reason or "Illegal move.")
 
     if st.button("↺ RESET GAME", use_container_width=True):
-        st.session_state.board               = np.zeros((16, 16), dtype=int)
-        st.session_state.turn                = 0
-        st.session_state.token_groups        = list(range(15, 0, -1))
-        st.session_state.scores              = (0, 0)
-        st.session_state.ai_message          = None
-        st.session_state.new_cells           = []
-        st.session_state.taunt_msg           = None
-        st.session_state.early_end_prompt    = None
+        st.session_state.board                = np.zeros((16, 16), dtype=int)
+        st.session_state.turn                 = 0
+        st.session_state.token_groups         = list(range(15, 0, -1))
+        st.session_state.scores               = (0, 0)
+        st.session_state.ai_message           = None
+        st.session_state.new_cells            = []
+        st.session_state.early_end_prompt     = False
         st.session_state.early_end_skip_until = 0
-        st.session_state.narrative_msg       = None
-        st.session_state.narrative_css       = None
-        st.session_state.narrative_icon      = None
-        st.session_state.balloons_shown      = False
         st.rerun()
 
     st.markdown('</div>', unsafe_allow_html=True)
@@ -1218,20 +1013,23 @@ with col_center:
     # Early-end prompt
     if st.session_state.early_end_prompt and game_active:
         st.markdown(
-            f'<div class="early-end-box"><div class="early-end-title">The Battlefield Quiets</div>'
-            f'{st.session_state.early_end_prompt}</div>',
+            '<div class="early-end-box">'
+            '<div class="early-end-title">Impasse Detected</div>'
+            'It appears neither player has any moves that would score or block a scoring line. '
+            'Would you like to end the game here?'
+            '</div>',
             unsafe_allow_html=True
         )
         _ecol1, _ecol2 = st.columns(2)
         with _ecol1:
-            if st.button("⚔ End the Battle", use_container_width=True):
+            if st.button("End Game Now", use_container_width=True):
                 st.session_state.turn = 15
-                st.session_state.early_end_prompt = None
+                st.session_state.early_end_prompt = False
                 st.rerun()
         with _ecol2:
-            if st.button("⚔ Fight On!", use_container_width=True):
+            if st.button("Keep Playing", use_container_width=True):
                 st.session_state.early_end_skip_until = round_num + 2
-                st.session_state.early_end_prompt = None
+                st.session_state.early_end_prompt = False
                 st.rerun()
 
     board_img = render_board_image(
@@ -1243,29 +1041,12 @@ with col_center:
 
     if not game_active:
         b_s, r_s = st.session_state.scores
-        # Generate narrative once and cache it
-        if st.session_state.narrative_msg is None:
-            pname = st.session_state.player_name
-            if b_s > r_s:
-                st.session_state.narrative_msg  = _generate_victory_msg(pname, b_s, r_s)
-                st.session_state.narrative_css  = "narrative-win"
-                st.session_state.narrative_icon = "🏆"
-            elif r_s > b_s:
-                st.session_state.narrative_msg  = _generate_defeat_msg(pname, b_s, r_s)
-                st.session_state.narrative_css  = "narrative-lose"
-                st.session_state.narrative_icon = "⚔"
-            else:
-                st.session_state.narrative_msg  = _generate_draw_msg(pname, b_s)
-                st.session_state.narrative_css  = "narrative-tie"
-                st.session_state.narrative_icon = "⚖"
-        st.markdown(
-            f'<div class="narrative-banner {st.session_state.narrative_css}">'
-            f'{st.session_state.narrative_icon} {st.session_state.narrative_msg}</div>',
-            unsafe_allow_html=True
-        )
-        if b_s > r_s and not st.session_state.balloons_shown:
-            st.balloons()
-            st.session_state.balloons_shown = True
+        if b_s > r_s:
+            st.markdown('<div class="gameover-banner gameover-win">🏆 VICTORY — You are Master of the Grid!</div>', unsafe_allow_html=True)
+        elif r_s > b_s:
+            st.markdown('<div class="gameover-banner gameover-lose">⚔ DEFEATED — The Game claims the Grid.</div>', unsafe_allow_html=True)
+        else:
+            st.markdown('<div class="gameover-banner gameover-tie">⚖ A DRAW — The Grid remains unclaimed.</div>', unsafe_allow_html=True)
 
     # Rules collapsible
     with st.expander("📜 Rules & Objective", expanded=False):
@@ -1303,20 +1084,4 @@ with col_right:
         <li><b>Scoring:</b> Valid lines earn points equal to their total token count (min 3, max 16).</li>
     </ol>
     """, unsafe_allow_html=True)
-
-    # Name input — visible before game starts (turn 0) or after game ends (turn >= 15)
-    if st.session_state.turn == 0 or st.session_state.turn >= 15:
-        st.markdown('<hr class="divider">', unsafe_allow_html=True)
-        st.markdown('<div class="name-input-box"><div class="name-input-label">Enter your name, Challenger</div></div>', unsafe_allow_html=True)
-        _entered_name = st.text_input(
-            "Your name",
-            value=st.session_state.player_name,
-            max_chars=20,
-            label_visibility="collapsed"
-        )
-        if _entered_name.strip():
-            st.session_state.player_name = _entered_name.strip()
-        else:
-            st.session_state.player_name = "Challenger"
-
     st.markdown('</div>', unsafe_allow_html=True)
