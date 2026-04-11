@@ -4,7 +4,15 @@
       "Bash(kill %1)",
       "Bash(python -c \":*)",
       "Bash(python selfplay.py)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(echo \"Exit code: $?\")",
+      "Bash(tee selfplay_output_quadrant_p1.txt)",
+      "Bash(tee selfplay_output_diagonal_fix.txt)",
+      "Bash(tee selfplay_output_synergy.txt)",
+      "Bash(xargs cat:*)",
+      "Bash(ls:*)",
+      "Bash(xargs grep:*)",
+      "Bash(grep -o 'stBaseButton[^\"` ,;\\)]*' /c/Users/Home/AppData/Local/Python/pythoncore-3.14-64/Lib/site-packages/streamlit/static/static/js/index.RuhrnD1v.js)"
     ]
   }
 }

@@ -1,0 +1,361 @@
+Running 500 AI vs AI games (90/10 Strategic Framework run)...
+   10/500  (15s elapsed, ~730s remaining)
+   20/500  (30s elapsed, ~723s remaining)
+   30/500  (44s elapsed, ~682s remaining)
+   40/500  (55s elapsed, ~634s remaining)
+   50/500  (67s elapsed, ~603s remaining)
+   60/500  (79s elapsed, ~578s remaining)
+   70/500  (91s elapsed, ~561s remaining)
+   80/500  (106s elapsed, ~558s remaining)
+   90/500  (120s elapsed, ~548s remaining)
+  100/500  (132s elapsed, ~529s remaining)
+  110/500  (145s elapsed, ~515s remaining)
+  120/500  (158s elapsed, ~500s remaining)
+  130/500  (170s elapsed, ~485s remaining)
+  140/500  (183s elapsed, ~470s remaining)
+  150/500  (196s elapsed, ~457s remaining)
+  160/500  (208s elapsed, ~442s remaining)
+  170/500  (221s elapsed, ~429s remaining)
+  180/500  (233s elapsed, ~415s remaining)
+  190/500  (245s elapsed, ~400s remaining)
+  200/500  (259s elapsed, ~388s remaining)
+  210/500  (271s elapsed, ~375s remaining)
+  220/500  (284s elapsed, ~361s remaining)
+  230/500  (297s elapsed, ~348s remaining)
+  240/500  (309s elapsed, ~335s remaining)
+  250/500  (321s elapsed, ~321s remaining)
+  260/500  (334s elapsed, ~308s remaining)
+  270/500  (348s elapsed, ~296s remaining)
+  280/500  (362s elapsed, ~285s remaining)
+  290/500  (375s elapsed, ~272s remaining)
+  300/500  (388s elapsed, ~259s remaining)
+  310/500  (401s elapsed, ~246s remaining)
+  320/500  (414s elapsed, ~233s remaining)
+  330/500  (427s elapsed, ~220s remaining)
+  340/500  (439s elapsed, ~207s remaining)
+  350/500  (456s elapsed, ~195s remaining)
+  360/500  (469s elapsed, ~182s remaining)
+  370/500  (481s elapsed, ~169s remaining)
+  380/500  (493s elapsed, ~156s remaining)
+  390/500  (507s elapsed, ~143s remaining)
+  400/500  (520s elapsed, ~130s remaining)
+  410/500  (532s elapsed, ~117s remaining)
+  420/500  (545s elapsed, ~104s remaining)
+  430/500  (558s elapsed, ~91s remaining)
+  440/500  (570s elapsed, ~78s remaining)
+  450/500  (583s elapsed, ~65s remaining)
+  460/500  (595s elapsed, ~52s remaining)
+  470/500  (607s elapsed, ~39s remaining)
+  480/500  (620s elapsed, ~26s remaining)
+  490/500  (633s elapsed, ~13s remaining)
+  500/500  (646s elapsed, ~0s remaining)
+All 500 games complete in 645.6s.
+
+
+══════════════════════════════════════════════════════════════════════
+  16 SQUARED — AI SELF-PLAY ANALYSIS REPORT
+  500 games  ·  AI-A vs AI-B  ·  alternating first player
+  Run: TWO-PHASE OPENING + x22 DENIAL  (vs baseline: 500-game pre-framework run)
+══════════════════════════════════════════════════════════════════════
+
+┌─ GAME RESULTS ────────────────────────────────────────────────────────
+  First mover  (P1) wins : 346 / 500  (69.2%)  ↑+1.2%  [~ vs baseline 68.0%]
+  Second mover (P2) wins : 140 / 500  (28.0%)
+  Draws                  :  14 / 500  (2.8%)
+
+  Average final score  —  P1: 53.6  ↓-9.3pts  [✗ vs baseline 62.9pts]
+                          P2: 41.8  ↓-9.9pts  [✗ vs baseline 51.7pts]
+  Average combined score  :  95.4  ↓-19.2pts  [✗ vs baseline 114.6pts]
+  Highest single score : 102
+  Lowest  single score : 0
+  Biggest  win margin  : 66 pts
+  Smallest win margin  : 1 pts
+  Average win margin   : 18.8 pts  ↑+0.3pts  [~ vs baseline 18.5pts]
+
+  Score distribution (both sides, all 500 games):
+      0–  9 pts :  51  █████████████████████████
+     10– 19 pts :  77  ██████████████████████████████████████
+     20– 29 pts :  86  ███████████████████████████████████████████
+     30– 39 pts : 143  ███████████████████████████████████████████████████████████████████████
+     40– 49 pts : 155  █████████████████████████████████████████████████████████████████████████████
+     50– 59 pts : 160  ████████████████████████████████████████████████████████████████████████████████
+     60– 69 pts : 149  ██████████████████████████████████████████████████████████████████████████
+     70– 79 pts : 121  ████████████████████████████████████████████████████████████
+     80– 89 pts :  47  ███████████████████████
+     90– 99 pts :   9  ████
+    100–109 pts :   2  █
+
+┌─ FIRST PLAYER ADVANTAGE ──────────────────────────────────────────────
+  Win rate — first mover  : 69.2%  (baseline: 68.0%)
+  Win rate — second mover : 28.0%
+  Avg score — first mover : 53.6
+  Avg score — second mover: 41.8
+  Score gap (1st − 2nd)   : +11.9 pts  (baseline: +11.2 pts)
+
+  Assessment   : SIGNIFICANT first-player advantage.
+  Recommendation: Recommend a compensation rule before public beta testing.
+
+┌─ DIRECTION USAGE CHANGES ─────────────────────────────────────────────
+  Overall direction split (both players, all rounds):
+    Cardinals  (N/S/E/W)  :  4203 moves  (28.0%)  [baseline: 29.8%  Δ -1.8%]
+    Diagonals (NE/NW/SE/SW): 10795 moves  (72.0%)  [baseline: 70.2%  Δ +1.8%]
+
+  Direction usage vs scoring efficiency:
+    N   used 1120 ( -51)  scored  47  ( 4.2%  Δeff -3.5%)  ████████████████████████████████████████████████████████
+    S   used 1053 ( -94)  scored  57  ( 5.4%  Δeff -2.0%)  ████████████████████████████████████████████████████
+    E   used 1000 ( -58)  scored  42  ( 4.2%  Δeff -3.3%)  ██████████████████████████████████████████████████
+    W   used 1030 ( -62)  scored  42  ( 4.1%  Δeff -2.8%)  ███████████████████████████████████████████████████
+    NE  used 2655 ( +50)  scored 1289  (48.5%  Δeff -11.5%)  ████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████
+    NW  used 2759 ( +81)  scored 1362  (49.4%  Δeff -11.7%)  █████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████
+    SE  used 2719 (+110)  scored 1345  (49.5%  Δeff -12.5%)  ███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████
+    SW  used 2662 ( +22)  scored 1241  (46.6%  Δeff -14.1%)  █████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████
+
+  Early-game (rounds 1–5) vs late-game (rounds 6–15) direction split:
+    Rounds 1–5  — Cardinals: 1594 (31.9%)  Diagonals: 3406 (68.1%)
+    Rounds 6–15 — Cardinals: 2609 (26.1%)  Diagonals: 7389 (73.9%)
+
+  Per-round direction breakdown (cardinal vs diagonal moves, both players):
+  Rd │ Cardinals │ Diagonals │  Cardinal%
+  ───┼───────────┼───────────┼───────────
+   1 │       447 │       553 │    44.7%  ████████
+   2 │       363 │       637 │    36.3%  ███████
+   3 │       296 │       704 │    29.6%  █████
+   4 │       253 │       747 │    25.3%  █████
+   5 │       235 │       765 │    23.5%  ████
+   6 │       210 │       790 │    21.0%  ████
+   7 │       215 │       785 │    21.5%  ████
+   8 │       199 │       801 │    19.9%  ███
+   9 │       185 │       815 │    18.5%  ███
+  10 │       198 │       802 │    19.8%  ███
+  11 │       199 │       801 │    19.9%  ███
+  12 │       244 │       756 │    24.4%  ████
+  13 │       297 │       703 │    29.7%  █████
+  14 │       432 │       566 │    43.3%  ████████
+  15 │       430 │       570 │    43.0%  ████████
+
+┌─ TERRITORY DENIAL EFFECTIVENESS ──────────────────────────────────────
+  Total cardinal moves tracked : 4203
+  Avg corridors denied / cardinal move : 7.31
+  Denial distribution:
+    Min : 0   Max : 43   Median : 1.0   Std : 13.27
+  Denials per cardinal move (count of moves):
+     0 corridors :  1857  ████████████████████████████████████████████████████████████████████████████████████████
+     1 corridors :   563  ██████████████████████████
+     2 corridors :   259  ████████████
+     3 corridors :   172  ████████
+     4 corridors :   127  ██████
+     5 corridors :   113  █████
+     6 corridors :    59  ██
+     7 corridors :    65  ███
+     8 corridors :    56  ██
+     9 corridors :    53  ██
+    10 corridors :    31  █
+    11 corridors :    37  █
+    12 corridors :    31  █
+    13 corridors :    43  ██
+    14 corridors :    24  █
+    15 corridors :    36  █
+    16 corridors :    11  
+    17 corridors :    29  █
+    18 corridors :     9  
+    19 corridors :    29  █
+    ... (16 more unique denial counts)
+
+  Winner vs loser early cardinal usage (rounds 1–5):
+    Winners used avg 1.54 early cardinal moves
+    Losers  used avg 1.65 early cardinal moves
+    → No strong correlation between early cardinal usage and outcome.
+
+  Games split by early cardinal volume (median = 2 moves):
+    High-cardinal games (n=250): avg combined score 67.5  P1 win rate 69.6%
+    Low-cardinal  games (n=250): avg combined score 123.3  P1 win rate 68.8%
+    → High-cardinal games produce lower combined scores (-55.9 pts).
+      Cardinal walls are suppressing total scoring — territory denial is working.
+
+┌─ STRATEGIC PATTERNS ──────────────────────────────────────────────────
+  Most-used starting border squares (top 12):
+    (14,16)  →   324 uses
+    ( 3, 1)  →   323 uses
+    ( 1,14)  →   311 uses
+    ( 1, 3)  →   305 uses
+    (16, 3)  →   303 uses
+    (14, 1)  →   292 uses
+    ( 3,16)  →   290 uses
+    ( 4, 1)  →   287 uses
+    (16,14)  →   284 uses
+    (13, 1)  →   277 uses
+    ( 1,13)  →   276 uses
+    ( 1, 9)  →   274 uses
+
+  Average scoring lines per game — P1: 6.06   P2: 4.95
+
+  Score gained per round (both players combined, all games):
+    Round  1  + 7181 pts  ███████████████████████████████████████████████████████████████████████  ← peak
+    Round  2  + 7018 pts  ██████████████████████████████████████████████████████████████████████
+    Round  3  + 6111 pts  █████████████████████████████████████████████████████████████
+    Round  4  + 5459 pts  ██████████████████████████████████████████████████████
+    Round  5  + 4341 pts  ███████████████████████████████████████████
+    Round  6  + 3593 pts  ███████████████████████████████████
+    Round  7  + 3145 pts  ███████████████████████████████
+    Round  8  + 2636 pts  ██████████████████████████
+    Round  9  + 2448 pts  ████████████████████████
+    Round 10  + 2460 pts  ████████████████████████
+    Round 11  + 1556 pts  ███████████████
+    Round 12  + 1059 pts  ██████████
+    Round 13  +  594 pts  █████
+    Round 14  +  107 pts  █
+    Round 15  +    0 pts  
+
+┌─ BOARD LOCKUP ANALYSIS ───────────────────────────────────────────────
+  Double-passes per round (both players passed in same round):
+    Round  1 :   0 ( 0.0%)  
+    Round  2 :   0 ( 0.0%)  
+    Round  3 :   0 ( 0.0%)  
+    Round  4 :   0 ( 0.0%)  
+    Round  5 :   0 ( 0.0%)  
+    Round  6 :   0 ( 0.0%)  
+    Round  7 :   0 ( 0.0%)  
+    Round  8 :   0 ( 0.0%)  
+    Round  9 :   0 ( 0.0%)  
+    Round 10 :   0 ( 0.0%)  
+    Round 11 :   0 ( 0.0%)  
+    Round 12 :   0 ( 0.0%)  
+    Round 13 :   0 ( 0.0%)  
+    Round 14 :   0 ( 0.0%)  
+    Round 15 :   0 ( 0.0%)  
+
+  Unused tokens per round (both players combined):
+    Round  1 :   932/15000 unused (  6.2%)  █
+    Round  2 :  1721/14000 unused ( 12.3%)  ██
+    Round  3 :  2168/13000 unused ( 16.7%)  ███
+    Round  4 :  2697/12000 unused ( 22.5%)  ████
+    Round  5 :  3235/11000 unused ( 29.4%)  █████
+    Round  6 :  4103/10000 unused ( 41.0%)  ████████
+    Round  7 :  3705/ 9000 unused ( 41.2%)  ████████
+    Round  8 :  3454/ 8000 unused ( 43.2%)  ████████
+    Round  9 :  3051/ 7000 unused ( 43.6%)  ████████
+    Round 10 :  2669/ 6000 unused ( 44.5%)  ████████
+    Round 11 :  2349/ 5000 unused ( 47.0%)  █████████
+    Round 12 :  1750/ 4000 unused ( 43.8%)  ████████
+    Round 13 :  1297/ 3000 unused ( 43.2%)  ████████
+    Round 14 :   748/ 2000 unused ( 37.4%)  ███████
+    Round 15 :     0/ 1000 unused (  0.0%)  
+
+  Games with ≥2 double-passes in rounds 7–10 : 0 (0.0%)
+  Overall token waste rate                   : 33879/120000 (28.2%)  [baseline: 26.7%  Δ +1.5%]
+
+  RECOMMENDATION: Board lockup is rare. Current token structure
+  and board size appear healthy for 15-round games.
+
+┌─ AI BEHAVIOR ─────────────────────────────────────────────────────────
+  First mover (P1):
+    Pass rate        : 1/7500 rounds (0.0%)
+    Avg tokens/round : 5.9
+    Token waste      : 15914/60000 (26.5%)
+    Blocking moves   : 1839/7499 (24.5%)  [baseline: 16.7%  Δ +7.8%]
+    Offensive moves  : 5660/7499 (75.5%)
+
+  Second mover (P2):
+    Pass rate        : 1/7500 rounds (0.0%)
+    Avg tokens/round : 5.6
+    Token waste      : 17965/60000 (29.9%)
+    Blocking moves   : 2083/7499 (27.8%)  [baseline: 16.7%  Δ +11.1%]
+    Offensive moves  : 5416/7499 (72.2%)
+
+  Combined blocking rate: 26.2%  [baseline: 16.7%  Δ +9.5%]
+
+┌─ STRATEGIC LOCKUP  (Official Definitions) ────────────────────────────
+  Definitions used:
+    Meaningful Offensive Move: path ends on far border (border-to-border)
+      OR bridges through ≥1 own existing token (extends partial line).
+    Meaningful Block: path covers a cell flagged by _build_blocking_map()
+      (i.e. directly intersects an opponent near-complete threat line).
+    Strategic Lockup Round: neither player made a meaningful move (passes
+      and non-meaningful placements both count as non-meaningful).
+
+  Total strategic lockup rounds (all 500 games) : 261
+  Average lockup rounds per game               : 0.52
+  Games with ≥1 lockup round                  : 203 (40.6%)
+
+  Lockup rounds by round number:
+  Rd │ Count │ % of games │ Bar
+  ───┼───────┼────────────┼───────────────────────
+   1 │     0 │      0.0%  │ 
+   2 │     1 │      0.2%  │ 
+   3 │     4 │      0.8%  │ 
+   4 │    10 │      2.0%  │ ██
+   5 │    12 │      2.4%  │ ██
+   6 │    31 │      6.2%  │ ██████
+   7 │    30 │      6.0%  │ ██████  ← mid-game
+   8 │    21 │      4.2%  │ ████
+   9 │    31 │      6.2%  │ ██████  ← mid-game
+  10 │    42 │      8.4%  │ ████████  ← mid-game
+  11 │    31 │      6.2%  │ ██████
+  12 │    36 │      7.2%  │ ███████
+  13 │    12 │      2.4%  │ ██
+  14 │     0 │      0.0%  │ 
+  15 │     0 │      0.0%  │ 
+
+  VERDICT: Strategic lockup is rare. Both players consistently find
+  meaningful moves throughout the game. The 90/10 framework has not
+  introduced non-productive move patterns.
+
+┌─ BALANCE ASSESSMENT ──────────────────────────────────────────────────
+  Average combined score per game : 95.4 pts  [baseline: 114.6]
+  Average score differential      : 18.8 pts  [baseline: 18.5]
+  Score range (single player)     : 0 – 102 pts
+
+  Scoring level : Healthy for a strategy game of this length.
+
+  Structural notes:
+  • First mover wins consistently more often. A compensation rule
+    (e.g. second player gets a small bonus) may be worth testing.
+  • Blocking rate of 26.2% reflects a healthy offense/defense mix.
+  • Token utilisation is healthy (72% of tokens placed).
+
+  OVERALL BALANCE VERDICT:
+  ⚠ First-mover win rate outside 40–60% range. Consider a small
+    compensation rule before broad beta release.
+
+  MID-GAME LOCKUP VERDICT:
+  ✓ Mid-game lockup is not a significant issue in the current config.
+
+┌─ OVERALL ASSESSMENT — 90/10 FRAMEWORK IMPACT ─────────────────────────
+  Comparison: POST-FRAMEWORK vs PRE-FRAMEWORK (500 games each)
+
+  1. FIRST PLAYER ADVANTAGE
+     Pre : 68.0%   Post: 69.2%   Δ +1.2%
+     → Essentially unchanged. The framework did not meaningfully shift
+       structural first-player advantage.
+
+  2. SCORING LEVELS
+     Pre combined avg : 114.6   Post: 95.4   Δ -19.2 pts
+     → Combined scoring dropped noticeably. Cardinal walls are reducing
+       total scoring — which is the intended effect of territory denial.
+
+  3. DIRECTION USAGE SHIFT
+     Pre  cardinals: 29.8%   Post: 28.0%   Δ -1.8%
+     → Direction split is similar to baseline. The framework tweaked
+       weights but the underlying move pool hasn't shifted dramatically.
+
+  4. TERRITORY DENIAL
+     Avg corridors denied per cardinal move : 7.31
+     → Each cardinal placement blocks multiple opponent corridors on
+       average — territory denial is a meaningful strategic pressure.
+
+  5. STRATEGIC LOCKUP
+     Avg lockup rounds per game : 0.52
+     → The framework has not introduced non-productive move patterns.
+       The AI consistently finds meaningful moves throughout each game.
+
+  6. MOST IMPACTFUL FINDING
+     Combined scoring changed by -19.2 pts — territory denial is compressing total point output.
+
+  7. RECOMMENDED NEXT STEPS
+  • First-player advantage remains significant (>60%). Add a second-player compensation rule before beta.
+  • Cardinal usage barely changed from baseline. The x15 denial bonus may not be large enough to shift move selection significantly.
+
+══════════════════════════════════════════════════════════════════════
+  End of report.
+══════════════════════════════════════════════════════════════════════
+

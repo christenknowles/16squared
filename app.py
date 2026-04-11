@@ -118,6 +118,20 @@ st.markdown("""
         background: linear-gradient(135deg, #3A7D44 0%, #4A9D5A 100%) !important;
         box-shadow: 0 3px 8px rgba(0,0,0,0.25) !important;
     }
+    /* Inactive compass direction buttons (secondary type) — dark/gold to contrast
+       with the active direction button which uses the primary green style. */
+    .stButton > button[data-testid="stBaseButton-secondary"] {
+        background: rgba(44, 24, 16, 0.45) !important;
+        color: #C4A265 !important;
+        border: 1px solid rgba(196,162,101,0.5) !important;
+        box-shadow: none !important;
+    }
+    .stButton > button[data-testid="stBaseButton-secondary"]:hover {
+        background: rgba(44, 24, 16, 0.65) !important;
+        color: #F5ECD7 !important;
+        border: 1px solid #C4A265 !important;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.3) !important;
+    }
     .stNumberInput input, .stSelectbox select {
         font-family: 'Crimson Pro', serif !important;
         background: rgba(255,255,255,0.55) !important;
@@ -186,7 +200,7 @@ class SixteenSquaredEngine:
         if count == 0:
             return True, [], None
         if not self.is_border(sx, sy):
-            return False, [], "Your starting square must be on the Grey Border."
+            return False, [], "Your starting square must be on the Border."
         if board[sy, sx] != 0:
             return False, [], "That border square is already occupied. Choose an empty one."
         if count == 1:
@@ -201,7 +215,7 @@ class SixteenSquaredEngine:
             if off_board:
                 return False, [], "That direction leads off the board. Choose a direction that moves into the battlefield."
             else:
-                return False, [], "That direction would Wall-Crawl along the border. Multi-token paths must enter the White Battlefield."
+                return False, [], "That direction would Wall-Crawl along the border. Multi-token paths must enter the Internal Grid."
 
         path, tokens_left, cx, cy = [], count, sx, sy
         has_touched_interior = False
@@ -233,7 +247,7 @@ class SixteenSquaredEngine:
                 return False, [], "Your path is immediately blocked by an opponent's token. Choose a different starting position or direction."
 
         if len(path) > 1 and not has_touched_interior:
-            return False, [], "Your path must cross into the White Battlefield. You cannot Wall-Crawl along the border."
+            return False, [], "Your path must cross into the Internal Grid. You cannot Wall-Crawl along the border."
         if not path:
             return False, [], "No valid path exists from that position in that direction."
 
@@ -279,7 +293,23 @@ class SixteenSquaredEngine:
                 if len(line) >= 3 and self.is_border(line[-1][0], line[-1][1]):
                     complete_gain += len(line)
                 else:
-                    partial_gain += len(line)
+                    # Viability check: scan the remaining cells ahead of this
+                    # partial chain toward the far border. If any player token
+                    # (value 1) is found, the line is permanently blocked and
+                    # dead — do not credit partial_gain and stop investing in it.
+                    # lx, ly is already the first cell past the end of the chain.
+                    fx, fy = lx, ly
+                    viable = False
+                    while 0 <= fx < 16 and 0 <= fy < 16:
+                        if board[fy, fx] == 1:
+                            break  # player token permanently blocks the far border
+                        if self.is_border(fx, fy):
+                            viable = True
+                            break
+                        fx += dx
+                        fy += dy
+                    if viable:
+                        partial_gain += len(line)
 
         return complete_gain, partial_gain
 
@@ -374,9 +404,21 @@ class SixteenSquaredEngine:
           4 gaps → ×15   very low; AI notes it but almost always scores instead
         The far border cell is included in the gap count when empty because
         the player must fill it to complete the scoring line.
+
+        TWO-PASS ARCHITECTURE:
+          Pass 1 (border-anchored): starts from every border cell containing a
+            player token, walks inward. Catches chains where the player has
+            already occupied the border entry point.
+          Pass 2 (interior-anchored): starts from interior player tokens that
+            are the back end of their chain in a given direction. Catches chains
+            that have grown purely from the interior outward — where neither
+            border endpoint yet contains a player token. Both passes use max()
+            to write urgency values, so a cell detected by both passes keeps the
+            higher value and is never double-counted.
         """
         blocking = np.zeros((16, 16))
 
+        # ── Pass 1: border-anchored scan ─────────────────────────────────────
         for y in range(16):
             for x in range(16):
                 if not (self.is_border(x, y) and board[y, x] == 1):
@@ -415,16 +457,247 @@ class SixteenSquaredEngine:
                     # Pre-scaled bonus = potential_line_score × urgency_multiplier.
                     # Urgency tiers calibrated against complete_gain × 120 scoring
                     # (see docstring above for derivation).
-                    urgency = {1: 140, 2: 75, 3: 30, 4: 15}[len(empty_cells)]
+                    urgency = {1: 140, 2: 75, 3: 40, 4: 15}[len(empty_cells)]
                     block_val = total_len * urgency
                     for ex, ey in empty_cells:
                         blocking[ey, ex] = max(blocking[ey, ex], block_val)
 
+        # ── Pass 2: interior-anchored scan ────────────────────────────────────
+        # Pass 1 is blind to chains where neither border endpoint contains a
+        # player token — the player built inward from the interior outward, so
+        # the border cells at both ends are still empty or AI-occupied. These
+        # chains are invisible to a border-start scan no matter how long they
+        # grow, until the player finally steps onto a border square.
+        #
+        # This pass finds those chains by starting from interior player tokens
+        # that are the "back end" of their chain in a given line direction — i.e.,
+        # the cell one step behind them (in the negative direction) is NOT a
+        # player token. This guarantees each chain is scanned exactly once per
+        # axis, avoiding redundant work.
+        #
+        # Urgency tiers and max() deduplication are identical to Pass 1.
+        # Cells already assigned a higher value by Pass 1 are not lowered.
+        #
+        # Four unique line axes cover all eight directions without duplication:
+        #   (1,0) = horizontal   (0,1) = vertical
+        #   (1,1) = diagonal /   (1,-1) = diagonal \
+        UNIQUE_AXES = [(1, 0), (0, 1), (1, 1), (1, -1)]
+
+        for y in range(1, 15):   # interior rows only (border rows handled by Pass 1)
+            for x in range(1, 15):  # interior cols only
+                if board[y, x] != 1:
+                    continue
+                for dx, dy in UNIQUE_AXES:
+                    # Only scan from this token if it is the back end of its chain
+                    # in direction (dx, dy): the cell behind it must NOT be a player
+                    # token. If it is, that earlier token will start this same scan
+                    # and this token's scan would be a duplicate.
+                    bx, by = x - dx, y - dy
+                    if 0 <= bx < 16 and 0 <= by < 16 and board[by, bx] == 1:
+                        continue
+
+                    # Walk FORWARD (positive direction) collecting the rest of the
+                    # chain and any empty cells until hitting an AI token or border.
+                    player_fwd = 1   # starting token
+                    empty_fwd  = []
+                    reached_fwd = False
+                    fx, fy = x + dx, y + dy
+                    while 0 <= fx < 16 and 0 <= fy < 16:
+                        if board[fy, fx] == 2:
+                            break  # AI token blocks forward path
+                        if board[fy, fx] == 1:
+                            player_fwd += 1
+                        else:
+                            empty_fwd.append((fx, fy))
+                        if self.is_border(fx, fy):
+                            reached_fwd = True
+                            break
+                        fx += dx
+                        fy += dy
+
+                    if not reached_fwd:
+                        continue  # forward path blocked by AI or walked off board
+
+                    # Walk BACKWARD (negative direction) collecting empty cells
+                    # until hitting an AI token or the far border.
+                    # (No player tokens behind the chain start by definition above.)
+                    player_bwd = 0   # starting token already in player_fwd
+                    empty_bwd  = []
+                    reached_bwd = False
+                    rx, ry = x - dx, y - dy
+                    while 0 <= rx < 16 and 0 <= ry < 16:
+                        if board[ry, rx] == 2:
+                            break  # AI token blocks backward path
+                        if board[ry, rx] == 1:
+                            player_bwd += 1  # shouldn't happen given chain-start check, but safe
+                        else:
+                            empty_bwd.append((rx, ry))
+                        if self.is_border(rx, ry):
+                            reached_bwd = True
+                            break
+                        rx -= dx
+                        ry -= dy
+
+                    if not reached_bwd:
+                        continue  # backward path blocked by AI or walked off board
+
+                    total_player = player_fwd + player_bwd
+                    all_empty    = empty_fwd + empty_bwd
+                    total_len    = total_player + len(all_empty)
+
+                    if total_len < 3 or not (1 <= len(all_empty) <= 4):
+                        continue
+
+                    urgency   = {1: 140, 2: 75, 3: 40, 4: 15}[len(all_empty)]
+                    block_val = total_len * urgency
+                    for ex, ey in all_empty:
+                        blocking[ey, ex] = max(blocking[ey, ex], block_val)
+
         return blocking
 
-    def get_ai_move(self, board, max_tokens, round_num):
+    def _assess_board_state(self, board, player_score, ai_score):
+        """
+        Unified board state assessment — the holistic layer of AI decision-making.
+
+        The three aspects below must be assessed together to produce one strategic
+        posture, not evaluated separately and summed. A human player sees the entire
+        board as one picture; this method does the same, deriving one set of
+        multipliers that shapes the entire move evaluation framework in get_ai_move().
+
+        ASPECTS COMBINED INTO ONE POSTURE:
+          1. Score differential (score_diff = ai_score - player_score):
+             Am I ahead or behind, and by how much? Shifts the AI's risk/reward
+             balance between completing its own lines vs disrupting the opponent.
+          2. Board density (interior battlefield occupancy, 0.0–1.0):
+             How full is the battlefield? A congested board favours bridging through
+             existing tokens over starting new lines, regardless of round number.
+          3. Combined overlay: score + density together determine the final posture.
+             A congested board with the AI behind gets both sets of multipliers.
+          4. Quadrant analysis: which 7×7 region does the player have the most tokens?
+             Returned as active_quadrant for use by get_ai_move() sampling bias.
+
+        POSTURE MULTIPLIERS compose ON TOP of the existing phase multipliers
+        (diag_score_mult, denial_mult) inside get_ai_move(). They do not replace
+        any calibrated values — they modulate them.
+
+        BLOCKING MAP CALIBRATION CONSTRAINT:
+          The _build_blocking_map() urgency tiers were calibrated against the base
+          diagonal complete_gain multiplier of ×140. When complete_gain_mult rises,
+          the effective multiplier becomes 140 × complete_gain_mult:
+            behind (×1.3)  → effective ×182: 1-gap block (~1400) still near-mandatory
+            crisis (×1.5)  → effective ×210: blocking_mult is also raised to ×1.5
+                             so the blocking urgency scales in tandem, preserving the
+                             relative urgency-vs-scoring calibration.
+          INVARIANT: blocking_mult must always scale alongside complete_gain_mult in
+          crisis posture so the blocking map urgency tiers remain competitive.
+
+        ACTIVE QUADRANT:
+          The 14×14 interior is divided into four 7×7 quadrants. The one with the
+          most player tokens is flagged as active if it holds ≥1.3× the average
+          count across all four quadrants. The 1.3× threshold prevents false
+          positives on balanced boards — if all four quadrants are roughly equal,
+          no quadrant is flagged and sampling stays fully random. When active,
+          get_ai_move() routes 40% of its 600 samples through border cells adjacent
+          to that quadrant, directing search budget toward the player's actual
+          building zone without eliminating global exploration.
+        """
+        score_diff = ai_score - player_score
+        # Interior battlefield only (14×14 cells), not the border ring.
+        # Border occupancy is not contested space; only interior density matters.
+        density = np.count_nonzero(board[1:15, 1:15]) / (14 * 14)
+
+        complete_gain_mult = 1.0
+        partial_gain_mult  = 1.0
+        blocking_mult      = 1.0
+        bridge_bonus_mult  = 1.0
+
+        # ── Score-based posture ───────────────────────────────────────────────
+        if score_diff <= -8:
+            posture = "crisis"
+            # Severely behind: must score AND disrupt simultaneously.
+            # complete_gain_mult and blocking_mult are raised in tandem to
+            # preserve the calibrated blocking-map urgency relationships
+            # (see BLOCKING MAP CALIBRATION CONSTRAINT in docstring above).
+            complete_gain_mult = 1.5
+            blocking_mult      = 1.5
+        elif score_diff <= -3:
+            posture = "behind"
+            # Moderately behind: prioritise completing lines over territory.
+            complete_gain_mult = 1.3
+        elif score_diff >= 3 and density < 0.50:
+            posture = "ahead"
+            # Ahead on an open board: protect lead by deprioritising speculative
+            # partial lines. Do not apply this on a congested board — congestion
+            # already forces conservative play via the density overlay below.
+            partial_gain_mult = 0.7
+        else:
+            posture = "even"
+
+        # ── Density overlay (applies on top of score-based posture) ──────────
+        # A congested board requires bridging through existing tokens rather than
+        # starting new lines, regardless of score differential.
+        if density >= 0.50:
+            bridge_bonus_mult *= 1.5
+            partial_gain_mult *= 0.6  # stacks with any score-based adjustment
+
+        # ── Quadrant analysis ─────────────────────────────────────────────────
+        # Divide the 14×14 interior into four 7×7 quadrants and count player
+        # tokens in each. The active quadrant is the one most above average —
+        # requiring ≥1.3× average to avoid flagging on balanced boards.
+        # board[row_slice, col_slice] where rows/cols 1–14 are the interior.
+        quad_counts = {
+            'bottom-left':  int(np.sum(board[1:8,  1:8]  == 1)),
+            'bottom-right': int(np.sum(board[1:8,  8:15] == 1)),
+            'top-left':     int(np.sum(board[8:15, 1:8]  == 1)),
+            'top-right':    int(np.sum(board[8:15, 8:15] == 1)),
+        }
+        total_player_interior = sum(quad_counts.values())
+        avg_quad = total_player_interior / 4.0
+        active_quadrant = None
+        active_quadrant_player_density = 0.0
+        if avg_quad > 0:
+            best_quad = max(quad_counts, key=quad_counts.get)
+            if quad_counts[best_quad] >= avg_quad * 1.3:
+                active_quadrant = best_quad
+                active_quadrant_player_density = quad_counts[best_quad] / 49.0
+
+        return {
+            'score_diff':                    score_diff,
+            'density':                       density,
+            'posture':                       posture,
+            'complete_gain_mult':            complete_gain_mult,
+            'partial_gain_mult':             partial_gain_mult,
+            'blocking_mult':                 blocking_mult,
+            'bridge_bonus_mult':             bridge_bonus_mult,
+            'active_quadrant':               active_quadrant,
+            'active_quadrant_player_density': active_quadrant_player_density,
+        }
+
+    def get_ai_move(self, board, max_tokens, round_num, player_score=0, ai_score=0):
         best_move, best_weight = None, -float('inf')
         threat_map = np.zeros((16, 16))
+
+        # ── Completed player scoring line analysis ─────────────────────────────
+        # Count how many scoring lines the player has already completed, and how
+        # many are diagonal. This is a direct pattern signal — it reads what the
+        # player has proven they can do, not just the score differential (which
+        # lags) or near-complete gap counts (which fire too late when full lines
+        # are being built each round). Used below to amplify heatmap sampling
+        # and weight contribution when the player is executing a diagonal strategy.
+        _player_lines    = self.get_scoring_lines(board)[1]
+        player_line_count = len(_player_lines)
+        player_diag_count = sum(
+            1 for line in _player_lines
+            if len(line) >= 2
+            and (line[1][0] - line[0][0]) != 0
+            and (line[1][1] - line[0][1]) != 0
+        )
+
+        # ── Heatmap weight multiplier ──────────────────────────────────────────
+        # Baseline 1.8: soft nudge that loses to almost any AI scoring move.
+        # Diagonal threat response is now handled by the synergy bonus (see below)
+        # rather than amplifying the heatmap multiplier per diagonal line count.
+        _heatmap_mult = 1.8
 
         # ── Medium-range threat heatmap ────────────────────────────────────────
         # 150 random (border, direction) samples build a probabilistic heat map of
@@ -432,9 +705,10 @@ class SixteenSquaredEngine:
         # accumulate threat weight, nudging the AI toward contested regions.
         # Threshold changed from > 3 to >= 3: a 3-token player path is already
         # near-complete and worth registering as a genuine threat.
+        _ALL_DIRS  = list(self.vectors.keys())
         for _ in range(150):
             tx, ty = self.get_random_border_coord()
-            td = random.choice(list(self.vectors.keys()))
+            td = random.choice(_ALL_DIRS)
             for tc in range(1, max_tokens + 1):
                 ok, t_path, _ = self.simulate_path(board, 1, tx, ty, td, tc)
                 if ok and len(t_path) >= 3:
@@ -448,6 +722,41 @@ class SixteenSquaredEngine:
         # Deterministic — reads actual board state rather than sampling. Catches
         # lines the heatmap misses when the specific start cell was never sampled.
         blocking_map = self._build_blocking_map(board)
+
+        # ── Holistic Board State Assessment ────────────────────────────────────
+        # Single unified evaluation of score differential, board density, and
+        # strategic posture. Produces multipliers that shape the weight formula
+        # below without replacing any existing calibrated values. Must be called
+        # after blocking_map is built so the full board picture is available.
+        bs = self._assess_board_state(board, player_score, ai_score)
+
+        # ── Active-quadrant biased sampling ────────────────────────────────────
+        # When the player is concentrated in one quadrant (active_quadrant is not
+        # None), 40% of the 600 samples start from border cells adjacent to that
+        # quadrant. This directs search budget toward the player's actual building
+        # zone without eliminating global exploration (60% remain fully random).
+        # Bias changes WHERE moves are sampled, not how they are scored — it
+        # composes additively with all existing weight multipliers and does not
+        # alter the scoring formula in any way.
+        # Adjacent border cells: the two border edges that bound the active quadrant.
+        # Only unoccupied cells (value == 0) are kept — occupied cells cannot be
+        # valid starting squares and would just waste sample budget.
+        _quad_border_candidates = {
+            'bottom-left':  [(0, y) for y in range(0, 9)] + [(x, 0) for x in range(0, 9)],
+            'bottom-right': [(15, y) for y in range(0, 9)] + [(x, 0) for x in range(7, 16)],
+            'top-left':     [(0, y) for y in range(7, 16)] + [(x, 15) for x in range(0, 9)],
+            'top-right':    [(15, y) for y in range(7, 16)] + [(x, 15) for x in range(7, 16)],
+        }
+        aq = bs['active_quadrant']
+        if aq:
+            biased_borders = [
+                (x, y) for x, y in _quad_border_candidates[aq]
+                if board[y, x] == 0
+            ]
+            use_bias = bool(biased_borders)
+        else:
+            biased_borders = []
+            use_bias = False
 
         token_counts = self._get_token_counts(max_tokens, round_num)
 
@@ -493,7 +802,10 @@ class SixteenSquaredEngine:
             denial_mult     = 1.0
 
         for _ in range(600):
-            ax, ay = self.get_random_border_coord()
+            if use_bias and random.random() < 0.4:
+                ax, ay = random.choice(biased_borders)
+            else:
+                ax, ay = self.get_random_border_coord()
             ad = random.choice(list(self.vectors.keys()))
             tc = random.choice(token_counts)
             ok, path, _ = self.simulate_path(board, 2, ax, ay, ad, tc)
@@ -510,67 +822,103 @@ class SixteenSquaredEngine:
                     weight += 80
 
                 # +20 per AI token already on board that this path bridges through.
-                # Rewards extending connected groups toward completion at zero extra
-                # token cost — the AI actively nurtures its existing chains.
-                weight += sum(20 for px, py in path if board[py, px] == 2)
+                # bridge_bonus_mult (from holistic assessment) rises on congested
+                # boards where extending existing chains is worth more than starting
+                # new lines from scratch.
+                bridge_count = sum(1 for px, py in path if board[py, px] == 2)
+                weight += bridge_count * 20 * bs['bridge_bonus_mult']
 
                 # Heatmap threat blocking: sum threat values for all cells in this
-                # path, scaled by 1.8. Provides a soft nudge toward contesting
-                # high-traffic corridors; not strong enough to override clear
-                # scoring opportunities, but tips close decisions toward defence.
-                weight += sum(threat_map[py, px] for px, py in path) * 1.8
+                # path, scaled by _heatmap_mult. Baseline is 1.8 (soft nudge).
+                # Escalates to 3.0–5.5 when the player has completed scoring lines,
+                # making diagonal corridor disruption genuinely competitive with
+                # the AI's own scoring when the player is executing a diagonal
+                # strategy. See player_diag_count / _heatmap_mult above.
+                weight += sum(threat_map[py, px] for px, py in path) * _heatmap_mult
 
                 # Direct blocking bonus: pre-scaled values from _build_blocking_map.
-                # A path covering a 1-gap player threat cell adds ~1300 — enough to
-                # make blocking near-complete lines reliably competitive with most
-                # offensive moves. The AI will never miss an obvious block.
-                weight += sum(blocking_map[py, px] for px, py in path)
+                # blocking_mult (from holistic assessment) is raised in crisis posture
+                # in tandem with complete_gain_mult, preserving the calibrated
+                # urgency-vs-scoring relationships (see _assess_board_state docstring).
+                # blocking_hit is stored raw (pre-mult) for synergy bonus evaluation.
+                blocking_hit = sum(blocking_map[py, px] for px, py in path)
+                weight += blocking_hit * bs['blocking_mult']
 
                 # Late-game bridge bonus (rounds 10+): re-using existing AI tokens
                 # is increasingly valuable as open board space fills up. +15 extra
-                # per bridged token on top of the base +20 above.
+                # per bridged token on top of the base +20 above. Also scaled by
+                # bridge_bonus_mult to stay consistent with the holistic assessment.
                 if round_num >= 10:
-                    weight += sum(1 for px, py in path if board[py, px] == 2) * 15
+                    weight += bridge_count * 15 * bs['bridge_bonus_mult']
 
                 complete_gain, partial_gain = self._evaluate_scoring(board, path)
+
+                # territory_denial computed for ALL directions (cardinal and diagonal)
+                # so the synergy bonus below can fire on any multi-purpose move.
+                territory_denial = self._evaluate_territory_denial(board, path)
 
                 if is_cardinal:
                     # ── Cardinal (N/S/E/W) — territory control primary ──────────
                     # Cardinals score at only 7-8% efficiency (vs 60%+ for diagonals)
                     # so their value is in denying corridors to the player, not scoring.
                     #
-                    # complete_gain × 80: still rewarded for the rare cardinal completion,
-                    # but at 2/3 the diagonal rate — cardinals score so infrequently that
-                    # inflating this bonus would distort move selection.
+                    # complete_gain × 80 × complete_gain_mult: when behind, even rare
+                    # cardinal completions should be weighted more heavily to close
+                    # the score gap. complete_gain_mult from holistic assessment.
                     #
-                    # partial_gain × 4: minimal — half-built cardinal lines rarely become
-                    # scoring lines and should not be chased for their own sake.
+                    # partial_gain × 4 × partial_gain_mult: reduced when ahead or on
+                    # congested board — half-built cardinal lines rarely complete and
+                    # should not be chased. partial_gain_mult from holistic assessment.
                     #
-                    # territory_denial × 22: raised from ×15. The primary signal for
-                    # cardinals. A 10-token horizontal wall denying ~10 corridors on
-                    # average adds 220 base, making cardinals meaningfully competitive
-                    # with diagonal partials. In the Cardinal Wall phase (rounds 2–5),
-                    # denial_mult = 1.5 raises the effective weight to ×33, strongly
-                    # favouring wide wall placements to compress the opponent's angles.
-                    territory_denial = self._evaluate_territory_denial(board, path)
-                    weight += (complete_gain * 80 + partial_gain * 4
-                               + territory_denial * 22 * denial_mult)
+                    # territory_denial × 22 × denial_mult: the primary signal for
+                    # cardinals. denial_mult is the phase multiplier (unchanged).
+                    weight += (complete_gain * 80  * bs['complete_gain_mult']
+                             + partial_gain  * 4   * bs['partial_gain_mult']
+                             + territory_denial * 22 * denial_mult)
                 else:
                     # ── Diagonal (NE/NW/SE/SW) — scoring primary ───────────────
                     # Diagonals score at 60%+ efficiency and are the AI's primary
                     # way to accumulate points.
                     #
-                    # complete_gain × 140 × diag_score_mult: the dominant signal.
-                    # In the Diagonal Anchor phase (round 1), diag_score_mult = 1.3
-                    # raises the effective multiplier to ×182, making a long border-
-                    # to-border diagonal the overwhelming opening priority. In all
-                    # other rounds diag_score_mult = 1.0 (standard ×140).
+                    # complete_gain × 140 × diag_score_mult × complete_gain_mult:
+                    # diag_score_mult is the phase multiplier (×1.3 in round 1).
+                    # complete_gain_mult from holistic assessment shifts aggressiveness
+                    # based on the score gap. Both compose independently.
                     #
-                    # partial_gain × 10 × diag_score_mult: similarly boosted in
-                    # round 1 to strongly prefer diagonal routes even when they are
-                    # partial, nudging the AI toward extending its diagonal anchor.
-                    weight += (complete_gain * 140 * diag_score_mult
-                               + partial_gain * 10 * diag_score_mult)
+                    # partial_gain × 10 × diag_score_mult × partial_gain_mult:
+                    # partial_gain_mult reduces speculative diagonal building when
+                    # ahead or congested, focusing resources on completable lines.
+                    weight += (complete_gain * 140 * diag_score_mult * bs['complete_gain_mult']
+                             + partial_gain  * 10  * diag_score_mult * bs['partial_gain_mult'])
+
+                # ── Synergy bonus ─────────────────────────────────────────────────
+                # Rewards moves that serve two or more strategic purposes at once:
+                # scoring, blocking a near-complete threat, denying territory, or
+                # bridging existing AI tokens.
+                #
+                # WHY FLAT 200: isolation tests showed a flat +200 per extra purpose
+                # is well-calibrated against the existing weight formula. A quality-
+                # scaled bonus would introduce calibration complexity without benefit
+                # because the individual thresholds (blocking_hit > 200, denial >= 3,
+                # bridge >= 2) already act as quality filters — only genuine signals
+                # fire, so the marginal reward can safely be uniform.
+                #
+                # CROSSOVER POINT: a dual-purpose move (score + block) beats a pure
+                # 12-token diagonal only when complete_gain >= ~8.5 tokens. This means
+                # the bonus does not inflate weak multi-purpose moves — a 3-token
+                # completion that happens to block is still worth less than a strong
+                # pure-scoring move. Critical-tier blocks (blocking_hit > 500) lower
+                # the crossover to ~7 tokens, correctly making them easier to prefer.
+                #
+                # FIRES ONLY when 2+ purposes are served simultaneously — a move that
+                # does one thing well gets no bonus; synergy requires actual overlap.
+                purposes_served = 0
+                if complete_gain > 0:     purposes_served += 1
+                if blocking_hit > 200:    purposes_served += 1
+                if territory_denial >= 3: purposes_served += 1
+                if bridge_count >= 2:     purposes_served += 1
+                if purposes_served >= 2:
+                    weight += 200 * (purposes_served - 1)
 
                 if weight > best_weight:
                     best_weight, best_move = weight, (ax, ay, ad, tc)
@@ -597,12 +945,12 @@ class SixteenSquaredEngine:
         # pass avoids wasting the last moves on low-value placements.
         return list(range(0, max_tokens + 1))
 
-    def should_ai_pass(self, board, max_tokens, round_num):
+    def should_ai_pass(self, board, max_tokens, round_num, player_score=0, ai_score=0):
         # Only consider passing in the final two rounds (max_tokens ≤ 2).
         # With 3+ tokens there is almost always a worthwhile move available.
         if max_tokens > 2:
             return False
-        best_move = self.get_ai_move(board, max_tokens, round_num)
+        best_move = self.get_ai_move(board, max_tokens, round_num, player_score, ai_score)
         if best_move is None:
             return True
         _, path, _ = self.simulate_path(board, 2, best_move[0], best_move[1], best_move[2], best_move[3])
@@ -832,39 +1180,93 @@ def _has_any_meaningful_move(board: np.ndarray, player: int, max_tokens: int) ->
     """Return True if the given player has at least one meaningful move.
 
     A meaningful move is one that:
-      - Reaches the far border (border-to-border potential scoring line), OR
+      - Reaches the far border directly (border-to-border path with the placed tokens),
+      - Completes a border-to-border line via bridge completion (see below), OR
       - Covers a cell flagged by the near-complete threat scanner (meaningful block).
 
-    Note: bridging through own tokens is intentionally excluded — on a congested board
-    almost every valid path bridges an existing token, making that criterion trivially
-    true and preventing early-end detection from ever triggering.
+    BRIDGE COMPLETION FIX:
+    simulate_path() stops when tokens_left reaches 0 and the next cell is empty —
+    even if the only remaining cell is an empty far-border square. In that case
+    path[-1] is the last own token before the border, not the border itself, so
+    the direct is_border(path[-1]) check fails. After each simulate_path call we
+    therefore extend from path[-1] through any consecutive own tokens in the same
+    direction. If that extension reaches the far border and the full line has at
+    least one interior cell, it qualifies as a meaningful scoring move.
 
-    len(path) >= 2 is required for border-to-border: a single-token placement (tc=1)
-    returns path=[(start_border_cell)] where is_border(path[-1]) is trivially True,
-    which is not a scoring move.
+    TOKEN SAMPLING FIX:
+    A line completable only at a specific tc (e.g., exactly 3 tokens) would be
+    found with probability 1/max_tokens per sample if tc were chosen randomly.
+    Instead, all token counts 1..max_tokens are tried for every sampled
+    (border, direction) pair — identical to the threat-heatmap approach in
+    get_ai_move(). This guarantees that every completable tc value is evaluated
+    for each starting position.
 
-    Uses 400 random samples — enough coverage even on a crowded board.
+    Note: bridging alone (without reaching the far border) is intentionally excluded.
+    On a congested board almost every valid path bridges an existing token, making
+    that criterion trivially true and preventing early-end detection from firing.
+
+    Sample count: 600 when max_tokens ≤ 4 (late rounds have fewer valid paths and
+    a narrower token budget, so extra coverage reduces false impasse detection).
+    400 otherwise.
     """
     if max_tokens <= 0:
         return False
-    # Engine always evaluates from player-2 perspective; flip board for player 1
+    # Engine always evaluates from player-2 perspective; flip board for player 1.
     if player == 1:
         eff = np.where(board == 1, 2, np.where(board == 2, 1, 0)).astype(int)
     else:
         eff = board.copy()
     bmap = engine._build_blocking_map(eff)
     has_block_targets = bool(np.any(bmap > 0))
-    for _ in range(400):
+
+    # More samples in late rounds: smaller token budgets mean fewer valid paths
+    # exist, so a larger sample is needed for reliable coverage.
+    n_samples = 600 if max_tokens <= 4 else 400
+
+    for _ in range(n_samples):
         ax, ay = engine.get_random_border_coord()
         ad = random.choice(list(engine.vectors.keys()))
-        tc = random.randint(1, max_tokens)
-        ok, path, _ = engine.simulate_path(eff, 2, ax, ay, ad, tc)
-        if not ok or not path:
-            continue
-        if len(path) >= 2 and engine.is_border(path[-1][0], path[-1][1]):
-            return True
-        if has_block_targets and any(bmap[py, px] > 0 for px, py in path):
-            return True
+
+        # Try every token count from 1 to max_tokens for this (start, direction).
+        # This ensures the one specific tc that completes the line is always tested,
+        # rather than hoping a single random tc value happens to match.
+        for tc in range(1, max_tokens + 1):
+            ok, path, _ = engine.simulate_path(eff, 2, ax, ay, ad, tc)
+            if not ok or not path:
+                continue
+
+            # ── Direct far-border check ───────────────────────────────────────
+            # Requires len >= 2: a tc=1 path is just [(start_border)]; is_border
+            # would be trivially True there but it is not a scoring move.
+            if len(path) >= 2 and engine.is_border(path[-1][0], path[-1][1]):
+                return True
+
+            # ── Bridge-completion check ───────────────────────────────────────
+            # Extend from the last placed/bridged cell through any consecutive own
+            # tokens in the same direction. If we reach a far-border cell via those
+            # own tokens and the full line touches at least one interior cell, the
+            # player can complete a scoring line with the available token budget.
+            dx, dy = engine.vectors[ad]
+            ex, ey = path[-1][0] + dx, path[-1][1] + dy
+            # Interior was touched if any cell in the placed path is non-border.
+            touches_interior = any(
+                not engine.is_border(px, py) for px, py in path
+            )
+            while 0 <= ex < 16 and 0 <= ey < 16:
+                if eff[ey, ex] == 2:  # own token — free bridge
+                    if not engine.is_border(ex, ey):
+                        touches_interior = True
+                    elif touches_interior:
+                        # Far border reached via own tokens; full line is valid.
+                        return True
+                    ex += dx
+                    ey += dy
+                else:
+                    break  # empty cell or opponent — bridge chain ends here
+
+            if has_block_targets and any(bmap[py, px] > 0 for px, py in path):
+                return True
+
     return False
 
 
@@ -877,6 +1279,9 @@ if 'board' not in st.session_state:
     st.session_state.new_cells            = []
     st.session_state.early_end_prompt     = False
     st.session_state.early_end_skip_until = 0
+    st.session_state["x_start"]           = 1
+    st.session_state["y_start"]           = 1
+    st.session_state["direction"]         = "N"
 
 # ── LAYOUT ─────────────────────────────────────────────────────────
 col_left, col_center, col_right = st.columns([1, 2.4, 1])
@@ -912,8 +1317,17 @@ with col_left:
         st.info(st.session_state.ai_message)
         st.session_state.ai_message = None
 
-    sx = st.number_input("X Start (Horizontal)", 1, 16, 1, disabled=not game_active)
-    sy = st.number_input("Y Start (Vertical)",   1, 16, 1, disabled=not game_active)
+    # Apply any pending widget reset BEFORE the widgets are instantiated.
+    # Session state keys bound to widgets cannot be set after instantiation,
+    # so the reset handler sets a flag and we action it here on the next rerun.
+    if st.session_state.get("_reset_inputs"):
+        st.session_state["x_start"]  = 1
+        st.session_state["y_start"]  = 1
+        st.session_state["direction"] = "N"
+        del st.session_state["_reset_inputs"]
+
+    sx = st.number_input("X Start (Horizontal)", 1, 16, disabled=not game_active, key="x_start")
+    sy = st.number_input("Y Start (Vertical)",   1, 16, disabled=not game_active, key="y_start")
     sc = st.number_input(
         "Tokens to Place",
         min_value=0,
@@ -922,20 +1336,41 @@ with col_left:
         disabled=not game_active
     )
 
-    dir_labels = {
-        'N':'North (Up)','S':'South (Down)','E':'East (Right)','W':'West (Left)',
-        'NE':'North-East','NW':'North-West','SE':'South-East','SW':'South-West'
-    }
-    sd = st.selectbox(
-        "Direction",
-        options=list(engine.vectors.keys()),
-        format_func=lambda x: dir_labels.get(x),
-        disabled=(not game_active or sc == 0)
-    )
+    # ── Direction compass ──────────────────────────────────────────────
+    # 3×3 grid of arrow buttons; "Direction" label sits in the center cell.
+    # Clicking a button immediately sets st.session_state["direction"].
+    _ARROW  = {'N':'↑','S':'↓','E':'→','W':'←','NE':'↗','NW':'↖','SE':'↘','SW':'↙'}
+    _CROWS  = [['NW','N','NE'], ['W',None,'E'], ['SW','S','SE']]
+    _dir_disabled = not game_active or sc == 0
+    _cur_dir = st.session_state.get("direction", "N")
+    for _crow in _CROWS:
+        _ccols = st.columns(3, gap="small")
+        for _ci, _d in enumerate(_crow):
+            with _ccols[_ci]:
+                if _d is None:
+                    st.markdown(
+                        '<div style="display:flex;align-items:center;justify-content:center;'
+                        'height:100%;padding:4px 0;font-family:\'Crimson Pro\',serif;'
+                        'font-size:0.875rem;color:#5C4A1E;font-weight:500;text-align:center;">'
+                        'Direction</div>',
+                        unsafe_allow_html=True,
+                    )
+                else:
+                    _btn_type = "primary" if _d == _cur_dir else "secondary"
+                    if st.button(
+                        f"{_ARROW[_d]} {_d}",
+                        key=f"_cdir_{_d}",
+                        type=_btn_type,
+                        disabled=_dir_disabled,
+                        use_container_width=True,
+                    ):
+                        st.session_state["direction"] = _d
+                        st.rerun()
+    sd = st.session_state.get("direction", "N")
 
     st.markdown('<hr class="divider">', unsafe_allow_html=True)
 
-    if st.button("⚔ CONFIRM MOVE", use_container_width=True, disabled=not game_active):
+    if st.button("⚔ CONFIRM MOVE", type="primary", use_container_width=True, disabled=not game_active):
         if sc > current_tokens:
             st.error(f"Only {current_tokens} tokens are allowed this round.")
         else:
@@ -952,12 +1387,15 @@ with col_left:
                     st.warning(reason)
 
                 ai_new_cells = []
+                # Compute scores after the player's move so the AI evaluates
+                # the board holistically from the correct score differential.
+                p_score, a_score = engine.calculate_scores(st.session_state.board)
                 with st.spinner("The Game is thinking..."):
-                    if engine.should_ai_pass(st.session_state.board, current_tokens, round_num):
+                    if engine.should_ai_pass(st.session_state.board, current_tokens, round_num, p_score, a_score):
                         st.session_state.ai_message = "The Game chose to pass this round."
                     else:
                         ai_move = engine.get_ai_move(
-                            st.session_state.board, current_tokens, round_num
+                            st.session_state.board, current_tokens, round_num, p_score, a_score
                         )
                         if ai_move:
                             _, ai_path, _ = engine.simulate_path(
@@ -995,7 +1433,7 @@ with col_left:
             else:
                 st.error(reason or "Illegal move.")
 
-    if st.button("↺ RESET GAME", use_container_width=True):
+    if st.button("↺ RESET GAME", type="primary", use_container_width=True):
         st.session_state.board                = np.zeros((16, 16), dtype=int)
         st.session_state.turn                 = 0
         st.session_state.token_groups         = list(range(15, 0, -1))
@@ -1004,6 +1442,7 @@ with col_left:
         st.session_state.new_cells            = []
         st.session_state.early_end_prompt     = False
         st.session_state.early_end_skip_until = 0
+        st.session_state["_reset_inputs"] = True
         st.rerun()
 
     st.markdown('</div>', unsafe_allow_html=True)
@@ -1048,40 +1487,61 @@ with col_center:
         else:
             st.markdown('<div class="gameover-banner gameover-tie">⚖ A DRAW — The Grid remains unclaimed.</div>', unsafe_allow_html=True)
 
-    # Rules collapsible
-    with st.expander("📜 Rules & Objective", expanded=False):
-        st.markdown("""
-        **Objective:** Forge straight scoring lines across the board — horizontally, vertically, or diagonally.
-        A line must start and end on the **Oak Border** and pass through at least one **Parchment Battlefield** square.
-
-        1. **Deployment:** Start on an empty Oak Border square. Tokens are placed in a straight line.
-        2. **Engagement:** Multi-token moves must enter the Parchment Battlefield. No Wall-Crawling.
-        3. **Obstacles:** You cannot pass through opponent tokens. Your path stops at collision.
-        4. **Bridges:** Passing through your own tokens costs nothing from your supply.
-        5. **Quantity:** Place any amount up to the round limit. Unused tokens are discarded.
-        6. **Passing:** Set tokens to 0 to forfeit your turn.
-        7. **Scoring:** Each valid scoring line earns points equal to its total token count (min 3, max 16).
-        """)
 
 # ── RIGHT COLUMN ──────────────────────────────────────────────────
 with col_right:
     st.markdown('<div class="side-box">', unsafe_allow_html=True)
-    st.markdown('<div class="game-title" style="font-size:1.0rem;">OBJECTIVE</div>', unsafe_allow_html=True)
+    st.markdown('<div class="game-title" style="font-size:1.3rem;">OBJECTIVE</div>', unsafe_allow_html=True)
     st.markdown("""
-    <div style="font-family:'Crimson Pro',serif;font-size:0.85rem;color:#2C1810;line-height:1.5;">
-    Forge straight scoring lines across the board — <b>horizontally, vertically, or diagonally.</b>
-    A line must start and end on the <b>Oak Border</b> and pass through at least one square in the <b>Parchment Battlefield</b>.
+    <div style="font-family:'Crimson Pro',serif;font-size:0.95rem;color:#2C1810;line-height:1.5;">
+    Build scoring lines to outscore your opponent. A valid scoring line must be perfectly straight, connect two different
+    <b>Border</b> edges, and pass through at least one square in the <b>Internal Grid</b>.
     </div>
-    <hr class="divider">
-    <div class="game-title" style="font-size:1.0rem;">THE RULES</div>
-    <ol style="font-family:'Crimson Pro',serif;font-size:0.82rem;color:#2C1810;padding-left:18px;line-height:1.6;margin:0;">
-        <li><b>Deployment:</b> Start on an empty <b>Oak Border</b> square. Tokens are placed in a straight line from that square inward.</li>
-        <li><b>Engagement:</b> Multi-token moves must enter the <b>Parchment Battlefield</b>. No Wall-Crawling along the border.</li>
-        <li><b>Obstacles:</b> Cannot pass through opponent tokens. Your path stops at the point of collision.</li>
-        <li><b>Bridges:</b> Passing through your own tokens costs nothing from your supply.</li>
-        <li><b>Quantity:</b> Place any amount up to the round limit. Unused tokens are discarded.</li>
-        <li><b>Passing:</b> Set tokens to 0 to forfeit your turn for that round.</li>
-        <li><b>Scoring:</b> Valid lines earn points equal to their total token count (min 3, max 16).</li>
-    </ol>
     """, unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
+
+    _body_style = "font-family:'Crimson Pro',serif;font-size:0.83rem;color:#2C1810;line-height:1.55;"
+
+    with st.expander("The Grid", expanded=False):
+        st.markdown(f"""<div style="{_body_style}">
+        The board is a 16×16 grid divided into two zones. The <b>Border</b> is the outer ring of 60 squares —
+        every move starts here and all scoring lines must start and end here. The <b>Internal Grid</b> is the
+        central 14×14 area of 196 squares — no scoring line counts unless it passes through here.
+        </div>""", unsafe_allow_html=True)
+
+    with st.expander("Gameplay", expanded=False):
+        st.markdown(f"""<div style="{_body_style}">
+        The game consists of 15 rounds. Each round your token supply decreases by one — starting at 15 tokens
+        in Round 1 down to 1 token in Round 15.
+        </div>""", unsafe_allow_html=True)
+
+    with st.expander("Placement Rules", expanded=False):
+        st.markdown(f"""<ol style="{_body_style}padding-left:16px;margin:0;">
+        <li><b>Deployment:</b> Start on an empty Border square. Tokens are placed in a straight line from that square inward toward the Internal Grid.</li>
+        <li><b>Engagement:</b> Multi-token moves must enter the Internal Grid. No Wall-Crawling — a multi-token path cannot stay entirely on the Border.</li>
+        <li><b>Obstacles:</b> Cannot pass through opponent tokens. Your path stops at the point of collision. Tokens placed before the collision remain on the grid.</li>
+        <li><b>Bridges:</b> You may pass through your own existing tokens freely. This costs nothing from your supply, allowing you to extend a line far beyond what your current round would normally permit.</li>
+        <li><b>Quantity:</b> Place any number of tokens up to the round maximum. Choosing to place fewer is a valid strategic decision. Unused tokens are permanently discarded.</li>
+        <li><b>Passing:</b> If you so choose, set tokens to 0 to forfeit your turn for that round.</li>
+        </ol>""", unsafe_allow_html=True)
+
+    with st.expander("Scoring", expanded=False):
+        st.markdown(f"""<div style="{_body_style}">
+        A sequence of tokens qualifies as a Scoring Line only if it meets all three criteria: (1) it is a
+        perfectly straight line, (2) it connects two different Border edges, and (3) it contains at least one
+        token in the Internal Grid. Each valid line scores points equal to the total number of tokens in that
+        line. A token that is part of two intersecting scoring lines counts for both lines. Minimum score per
+        line: 3 points. Maximum score per line: 16 points.
+        </div>""", unsafe_allow_html=True)
+
+    with st.expander("Winning", expanded=False):
+        st.markdown(f"""<div style="{_body_style}">
+        The game concludes after Round 15, or earlier if both players agree that no meaningful moves remain.
+        The player with the highest cumulative score is declared the <b>Master of the Grid</b>.
+        </div>""", unsafe_allow_html=True)
+
+    with st.expander("Tiebreaker", expanded=False):
+        st.markdown(f"""<div style="{_body_style}">
+        If scores are tied after 15 rounds, the player who completed the single highest-value scoring line
+        wins. If still tied, the player who completed the most scoring lines wins.
+        </div>""", unsafe_allow_html=True)
